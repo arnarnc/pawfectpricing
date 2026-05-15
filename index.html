@@ -1,293 +1,219 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Pokemon eBay Smart Viewer</title>
-
-<style>
-  body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    background: #111;
-    color: white;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-  }
-
-  .box {
-    width: 92%;
-    max-width: 820px;
-    background: #1e1e1e;
-    padding: 28px;
-    border-radius: 14px;
-  }
-
-  h2 {
-    text-align: center;
-    margin-top: 0;
-    margin-bottom: 18px;
-  }
-
-  /* TOP BUTTONS */
-  .top-buttons {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin-bottom: 14px;
-  }
-
-  .top-buttons a {
-    display: block;
-    text-align: center;
-    padding: 12px;
-    background: #0064d2;
-    color: white;
-    text-decoration: none;
-    border-radius: 10px;
-    font-weight: bold;
-  }
-
-  .top-buttons a:hover {
-    background: #0050aa;
-  }
-
-  /* INPUT WRAP */
-  .input-wrap {
-    position: relative;
-  }
-
-  input {
-    width: 100%;
-    padding: 16px 42px 16px 16px;
-    font-size: 16px;
-    border-radius: 10px;
-    border: none;
-    outline: none;
-    box-sizing: border-box;
-  }
-
-  /* CLEAR BUTTON */
-  .clear-btn {
-    position: absolute;
-    right: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: #444;
-    border: none;
-    color: white;
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    cursor: pointer;
-  }
-
-  .clear-btn:hover {
-    background: #666;
-  }
-
-  /* SUGGESTIONS */
-  .suggestions {
-    position: absolute;
-    top: 52px;
-    left: 0;
-    right: 0;
-    background: #2a2a2a;
-    border-radius: 10px;
-    max-height: 220px;
-    overflow-y: auto;
-    z-index: 10;
-  }
-
-  .suggestions div {
-    padding: 10px;
-    cursor: pointer;
-    border-bottom: 1px solid #333;
-  }
-
-  .suggestions div:hover {
-    background: #444;
-  }
-
-  .status {
-    margin-top: 14px;
-    font-size: 13px;
-    color: #6cf;
-    text-align: center;
-  }
-
-  .actions {
-    text-align: center;
-    margin-top: 14px;
-  }
-
-  button.reset {
-    padding: 10px 14px;
-    border: none;
-    border-radius: 8px;
-    background: #444;
-    color: white;
-    cursor: pointer;
-  }
-
-  button.reset:hover {
-    background: #666;
-  }
-
-  @media(max-width:700px){
-    .top-buttons {
-      grid-template-columns: 1fr;
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Pokemon eBay Smart Viewer</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
     }
-  }
-</style>
+    .box {
+      width: 92%;
+      max-width: 820px;
+      background: #1e1e1e;
+      padding: 28px;
+      border-radius: 14px;
+    }
+    h2 { text-align: center; margin-top: 0; margin-bottom: 18px; }
+
+    .top-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .top-buttons a {
+      display: block;
+      text-align: center;
+      padding: 12px;
+      background: #0064d2;
+      color: white;
+      text-decoration: none;
+      border-radius: 10px;
+      font-weight: bold;
+    }
+    .top-buttons a:hover { background: #0050aa; }
+
+    .input-wrap { position: relative; }
+    input {
+      width: 100%;
+      padding: 16px 42px 16px 16px;
+      font-size: 16px;
+      border-radius: 10px;
+      border: none;
+      outline: none;
+      box-sizing: border-box;
+    }
+
+    .clear-btn {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: #444;
+      border: none;
+      color: white;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    .clear-btn:hover { background: #666; }
+
+    .suggestions {
+      position: absolute;
+      top: 52px;
+      left: 0;
+      right: 0;
+      background: #2a2a2a;
+      border-radius: 10px;
+      max-height: 220px;
+      overflow-y: auto;
+      z-index: 10;
+    }
+    .suggestions div {
+      padding: 10px;
+      cursor: pointer;
+      border-bottom: 1px solid #333;
+    }
+    .suggestions div:hover { background: #444; }
+
+    .status { margin-top: 14px; font-size: 13px; color: #6cf; text-align: center; }
+
+    .actions { text-align: center; margin-top: 14px; }
+    button.reset {
+      padding: 10px 14px;
+      border: none;
+      border-radius: 8px;
+      background: #444;
+      color: white;
+      cursor: pointer;
+    }
+    button.reset:hover { background: #666; }
+
+    @media(max-width:700px){
+      .top-buttons { grid-template-columns: 1fr; }
+    }
+  </style>
 </head>
-
 <body>
-
 <div class="box">
-
   <h2>Pokemon eBay Smart Viewer</h2>
 
-  <!-- TOP BUTTONS -->
   <div class="top-buttons">
     <a id="worldwideLink" target="_blank">🌍 Worldwide Search</a>
-    <a id="auLink" target="_blank">🦘 Australia Search</a>
+    <a id="auLink" target="_blank">🇦🇺 Australia Search</a>
   </div>
 
-  <!-- INPUT -->
   <div class="input-wrap">
-
-    <input id="cardInput"
-           placeholder="Enter Pokémon card..."
-           value="Gengar 14/132 Holo"
-           oninput="update()" />
-
+    <input id="cardInput" placeholder="Enter Pokémon card..." value="Gengar 14/132 Holo" oninput="update()" />
     <button class="clear-btn" onclick="clearInput()">×</button>
-
     <div class="suggestions" id="suggestions"></div>
   </div>
 
   <div class="status" id="status"></div>
-
   <div class="actions">
     <button class="reset" onclick="resetHistory()">Reset History</button>
   </div>
-
 </div>
 
 <script>
+  const KEY = "pokemon_history_1000";
 
-const KEY = "pokemon_history_1000";
-
-function getHistory() {
-  return JSON.parse(localStorage.getItem(KEY) || "[]");
-}
-
-function saveHistory(value) {
-
-  let history = getHistory();
-  value = value.trim();
-  if (!value) return;
-
-  history = history.filter(x => x !== value);
-  history.unshift(value);
-
-  if (history.length > 1000) {
-    history = history.slice(0, 1000);
+  function getHistory() {
+    return JSON.parse(localStorage.getItem(KEY) || "[]");
   }
 
-  localStorage.setItem(KEY, JSON.stringify(history));
-}
+  function saveHistory(value) {
+    let history = getHistory();
+    value = value.trim();
+    if (!value) return;
+    history = history.filter(x => x !== value);
+    history.unshift(value);
+    if (history.length > 1000) history = history.slice(0, 1000);
+    localStorage.setItem(KEY, JSON.stringify(history));
+  }
 
-function buildUrls(input) {
+  /**
+   * Detects graded cards. Matches:
+   *  - PSA, BGS, CGC, TAG followed by optional space and a number 1–10
+   *    e.g. PSA10, PSA 10, BGS9, BGS 9, TAG10, TAG 10
+   *  - Does NOT match "tag team" or other non-numeric "tag" uses
+   */
+  function isGraded(input) {
+    return /\b(PSA|BGS|CGC|TAG)\s?(?:10(?:\.0)?|[1-9](?:\.[05])?)\b/i.test(input);
+  }
 
-  const encoded = encodeURIComponent(input);
+  function buildUrls(input) {
+    const encoded = encodeURIComponent(input);
+    const gradedFlag = isGraded(input) ? "Yes" : "No";
+    return {
+      worldwide: `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&_sacat=0&LH_Sold=1&LH_Complete=1&rt=nc&Graded=${gradedFlag}&_dcat=183454`,
+      australia: `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&_sacat=0&LH_Sold=1&LH_Complete=1&rt=nc&LH_PrefLoc=1&Graded=${gradedFlag}&_dcat=183454`
+    };
+  }
 
-  const hasGraded = /PSA|BGS|CGC/i.test(input);
-  const gradedFlag = hasGraded ? "Yes" : "No";
-
-  return {
-    worldwide:
-      `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}` +
-      `&_sacat=0&LH_Sold=1&LH_Complete=1&rt=nc&Graded=${gradedFlag}&_dcat=183454`,
-
-    australia:
-      `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}` +
-      `&_sacat=0&LH_Sold=1&LH_Complete=1&rt=nc&LH_PrefLoc=1&Graded=${gradedFlag}&_dcat=183454`
-  };
-}
-
-function update() {
-
-  const value = document.getElementById("cardInput").value.trim();
-  if (!value) return;
-
-  saveHistory(value);
-
-  const urls = buildUrls(value);
-
-  document.getElementById("worldwideLink").href = urls.worldwide;
-  document.getElementById("auLink").href = urls.australia;
-
-  document.getElementById("status").innerText =
-    /PSA|BGS|CGC/i.test(value)
+  function update() {
+    const value = document.getElementById("cardInput").value.trim();
+    if (!value) return;
+    saveHistory(value);
+    const urls = buildUrls(value);
+    document.getElementById("worldwideLink").href = urls.worldwide;
+    document.getElementById("auLink").href = urls.australia;
+    document.getElementById("status").innerText = isGraded(value)
       ? "Graded Mode Detected"
       : "Raw Mode";
+    renderSuggestions();
+  }
 
-  renderSuggestions();
-}
+  function renderSuggestions() {
+    const history = getHistory();
+    const input = document.getElementById("cardInput").value.toLowerCase();
+    const box = document.getElementById("suggestions");
+    box.innerHTML = "";
+    if (!input) return;
+    history
+      .filter(x => x.toLowerCase().includes(input))
+      .slice(0, 10)
+      .forEach(item => {
+        const div = document.createElement("div");
+        div.innerText = item;
+        div.onclick = () => {
+          document.getElementById("cardInput").value = item;
+          update();
+        };
+        box.appendChild(div);
+      });
+  }
 
-function renderSuggestions() {
-
-  const history = getHistory();
-  const input = document.getElementById("cardInput").value.toLowerCase();
-  const box = document.getElementById("suggestions");
-
-  box.innerHTML = "";
-
-  if (!input) return;
-
-  history
-    .filter(x => x.toLowerCase().includes(input))
-    .slice(0, 10)
-    .forEach(item => {
-
-      const div = document.createElement("div");
-      div.innerText = item;
-
-      div.onclick = () => {
-        document.getElementById("cardInput").value = item;
-        update();
-      };
-
-      box.appendChild(div);
-    });
-}
-
-function clearInput() {
-  const input = document.getElementById("cardInput");
-  input.value = "";
-  input.focus();
-  document.getElementById("suggestions").innerHTML = "";
-}
-
-function resetHistory() {
-  localStorage.removeItem(KEY);
-  document.getElementById("suggestions").innerHTML = "";
-  document.getElementById("status").innerText = "History cleared ✔";
-}
-
-document.addEventListener("click", (e) => {
-  if (!document.querySelector(".input-wrap").contains(e.target)) {
+  function clearInput() {
+    const input = document.getElementById("cardInput");
+    input.value = "";
+    input.focus();
     document.getElementById("suggestions").innerHTML = "";
   }
-});
 
-window.onload = update;
+  function resetHistory() {
+    localStorage.removeItem(KEY);
+    document.getElementById("suggestions").innerHTML = "";
+    document.getElementById("status").innerText = "History cleared ✔";
+  }
 
+  document.addEventListener("click", (e) => {
+    if (!document.querySelector(".input-wrap").contains(e.target)) {
+      document.getElementById("suggestions").innerHTML = "";
+    }
+  });
+
+  window.onload = update;
 </script>
-
 </body>
 </html>
