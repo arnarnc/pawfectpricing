@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Pokemon eBay Graded Checker</title>
+<title>Pokemon eBay Smart Viewer</title>
 
 <style>
   body {
@@ -19,27 +19,23 @@
 
   .box {
     width: 92%;
-    max-width: 760px;
+    max-width: 820px;
     background: #1e1e1e;
-    padding: 30px;
+    padding: 28px;
     border-radius: 14px;
-    box-shadow: 0 0 25px rgba(0,0,0,0.4);
   }
 
   h2 {
-    margin-top: 0;
     text-align: center;
-    font-size: 22px;
+    margin-top: 0;
   }
 
-  .input-row {
-    display: flex;
-    gap: 12px;
-    margin-top: 15px;
+  .input-wrap {
+    position: relative;
   }
 
   input {
-    flex: 1;
+    width: 100%;
     padding: 16px;
     font-size: 16px;
     border-radius: 10px;
@@ -47,29 +43,33 @@
     outline: none;
   }
 
-  button {
-    padding: 16px 24px;
-    font-size: 16px;
-    border: none;
+  .suggestions {
+    position: absolute;
+    top: 52px;
+    left: 0;
+    right: 0;
+    background: #2a2a2a;
     border-radius: 10px;
-    background: #0064d2;
-    color: white;
-    cursor: pointer;
-    font-weight: bold;
-    min-width: 140px;
-    transition: 0.2s;
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: 10;
   }
 
-  button:hover {
-    background: #004ea8;
-    transform: translateY(-1px);
+  .suggestions div {
+    padding: 10px;
+    cursor: pointer;
+    border-bottom: 1px solid #333;
+  }
+
+  .suggestions div:hover {
+    background: #444;
   }
 
   .links {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 14px;
-    margin-top: 20px;
+    gap: 12px;
+    margin-top: 18px;
   }
 
   .card {
@@ -86,8 +86,6 @@
     color: white;
     text-decoration: none;
     border-radius: 8px;
-    word-break: break-word;
-    font-size: 14px;
   }
 
   a:hover {
@@ -101,17 +99,27 @@
     text-align: center;
   }
 
+  .actions {
+    text-align: center;
+    margin-top: 14px;
+  }
+
+  button {
+    padding: 10px 14px;
+    border: none;
+    border-radius: 8px;
+    background: #444;
+    color: white;
+    cursor: pointer;
+  }
+
+  button:hover {
+    background: #666;
+  }
+
   @media(max-width:700px){
     .links {
       grid-template-columns: 1fr;
-    }
-
-    .input-row {
-      flex-direction: column;
-    }
-
-    button {
-      width: 100%;
     }
   }
 </style>
@@ -121,14 +129,15 @@
 
 <div class="box">
 
-  <h2>Pokemon eBay Sold Checker</h2>
+  <h2>Pokemon eBay Smart Viewer</h2>
 
-  <div class="input-row">
+  <div class="input-wrap">
     <input id="cardInput"
+           placeholder="Enter Pokémon card..."
            value="Gengar 14/132 Holo"
-           placeholder="Enter card name (PSA / BGS / CGC optional)" />
+           oninput="update()" />
 
-    <button onclick="updateLinks()">Search</button>
+    <div class="suggestions" id="suggestions"></div>
   </div>
 
   <div class="links">
@@ -139,7 +148,7 @@
     </div>
 
     <div class="card">
-      <h3>Australia Only</h3>
+      <h3>Australia</h3>
       <a id="auLink" target="_blank">Open Search</a>
     </div>
 
@@ -147,35 +156,65 @@
 
   <div class="status" id="status"></div>
 
+  <div class="actions">
+    <button onclick="resetHistory()">Reset History</button>
+  </div>
+
 </div>
 
 <script>
 
-function buildUrls(input) {
+const KEY = "pokemon_history_1000";
 
-  const raw = input.trim();
-  const encoded = encodeURIComponent(raw);
-
-  const hasGraded = /PSA|BGS|CGC/i.test(raw);
-  const gradedFlag = hasGraded ? "Yes" : "No";
-
-  const worldwide =
-    `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}` +
-    `&_sacat=0&LH_Sold=1&LH_Complete=1&rt=nc&Graded=${gradedFlag}&_dcat=183454`;
-
-  const australia =
-    `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}` +
-    `&_sacat=0&LH_Sold=1&LH_Complete=1&rt=nc&LH_PrefLoc=1&Graded=${gradedFlag}&_dcat=183454`;
-
-  return { worldwide, australia, gradedFlag };
+function getHistory() {
+  return JSON.parse(localStorage.getItem(KEY) || "[]");
 }
 
-function updateLinks() {
+function saveHistory(value) {
+
+  let history = getHistory();
+
+  value = value.trim();
+  if (!value) return;
+
+  // remove duplicate
+  history = history.filter(x => x !== value);
+
+  // add newest first
+  history.unshift(value);
+
+  // limit to 1000
+  if (history.length > 1000) {
+    history = history.slice(0, 1000);
+  }
+
+  localStorage.setItem(KEY, JSON.stringify(history));
+}
+
+function buildUrls(input) {
+
+  const encoded = encodeURIComponent(input);
+
+  const hasGraded = /PSA|BGS|CGC/i.test(input);
+  const gradedFlag = hasGraded ? "Yes" : "No";
+
+  return {
+    worldwide:
+      `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}` +
+      `&_sacat=0&LH_Sold=1&LH_Complete=1&rt=nc&Graded=${gradedFlag}&_dcat=183454`,
+
+    australia:
+      `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}` +
+      `&_sacat=0&LH_Sold=1&LH_Complete=1&rt=nc&LH_PrefLoc=1&Graded=${gradedFlag}&_dcat=183454`
+  };
+}
+
+function update() {
 
   const value = document.getElementById("cardInput").value.trim();
   if (!value) return;
 
-  localStorage.setItem("pokemonSearch", value);
+  saveHistory(value);
 
   const urls = buildUrls(value);
 
@@ -183,23 +222,53 @@ function updateLinks() {
   document.getElementById("auLink").href = urls.australia;
 
   document.getElementById("status").innerText =
-    urls.gradedFlag === "Yes"
-      ? "Detected: Graded Cards (PSA/BGS/CGC)"
-      : "Detected: Raw Cards";
+    /PSA|BGS|CGC/i.test(value)
+      ? "Graded Mode Detected"
+      : "Raw Mode";
+
+  renderSuggestions();
+}
+
+function renderSuggestions() {
+
+  const history = getHistory();
+  const box = document.getElementById("suggestions");
+  const input = document.getElementById("cardInput").value.toLowerCase();
+
+  box.innerHTML = "";
+
+  if (!input) return;
+
+  const filtered = history
+    .filter(x => x.toLowerCase().includes(input))
+    .slice(0, 10);
+
+  filtered.forEach(item => {
+    const div = document.createElement("div");
+    div.innerText = item;
+    div.onclick = () => {
+      document.getElementById("cardInput").value = item;
+      update();
+    };
+    box.appendChild(div);
+  });
+}
+
+function resetHistory() {
+  localStorage.removeItem(KEY);
+  document.getElementById("suggestions").innerHTML = "";
+  document.getElementById("status").innerText = "History cleared ✔";
 }
 
 window.onload = () => {
-  const saved = localStorage.getItem("pokemonSearch");
-  if (saved) {
-    document.getElementById("cardInput").value = saved;
-  }
-  updateLinks();
+  update();
 };
 
-document.getElementById("cardInput")
-  .addEventListener("keypress", function(e){
-    if(e.key === "Enter") updateLinks();
-  });
+document.addEventListener("click", (e) => {
+  if (!document.querySelector(".input-wrap").contains(e.target)) {
+    document.getElementById("suggestions").innerHTML = "";
+  }
+});
 
 </script>
 
