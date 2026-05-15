@@ -14,52 +14,80 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100vh;
+    min-height: 100vh;
   }
 
   .box {
-    width: 90%;
-    max-width: 750px;
+    width: 92%;
+    max-width: 760px;
     background: #1e1e1e;
-    padding: 25px;
-    border-radius: 12px;
+    padding: 30px;
+    border-radius: 14px;
+    box-shadow: 0 0 25px rgba(0,0,0,0.4);
   }
 
   h2 {
     margin-top: 0;
     text-align: center;
+    font-size: 22px;
+  }
+
+  .input-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 15px;
   }
 
   input {
-    width: 100%;
-    padding: 14px;
+    flex: 1;
+    padding: 16px;
     font-size: 16px;
-    border-radius: 8px;
+    border-radius: 10px;
     border: none;
-    margin-bottom: 15px;
+    outline: none;
+  }
+
+  button {
+    padding: 16px 24px;
+    font-size: 16px;
+    border: none;
+    border-radius: 10px;
+    background: #0064d2;
+    color: white;
+    cursor: pointer;
+    font-weight: bold;
+    min-width: 140px;
+    transition: 0.2s;
+  }
+
+  button:hover {
+    background: #004ea8;
+    transform: translateY(-1px);
   }
 
   .links {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 12px;
+    gap: 14px;
+    margin-top: 20px;
   }
 
   .card {
     background: #2a2a2a;
-    padding: 15px;
-    border-radius: 10px;
+    padding: 16px;
+    border-radius: 12px;
   }
 
   a {
     display: inline-block;
     margin-top: 10px;
-    padding: 10px 14px;
+    padding: 12px 16px;
     background: #0064d2;
     color: white;
     text-decoration: none;
     border-radius: 8px;
     word-break: break-word;
+    font-size: 14px;
   }
 
   a:hover {
@@ -67,14 +95,23 @@
   }
 
   .status {
-    margin-top: 10px;
+    margin-top: 12px;
     font-size: 13px;
     color: #6cf;
+    text-align: center;
   }
 
   @media(max-width:700px){
-    .links{
-      grid-template-columns:1fr;
+    .links {
+      grid-template-columns: 1fr;
+    }
+
+    .input-row {
+      flex-direction: column;
+    }
+
+    button {
+      width: 100%;
     }
   }
 </style>
@@ -86,20 +123,24 @@
 
   <h2>Pokemon eBay Sold Checker</h2>
 
-  <input id="cardInput"
-         value="Gengar 14/132 Holo"
-         placeholder="Enter card name (PSA / BGS / CGC optional)"/>
+  <div class="input-row">
+    <input id="cardInput"
+           value="Gengar 14/132 Holo"
+           placeholder="Enter card name (PSA / BGS / CGC optional)" />
+
+    <button onclick="updateLinks()">Search</button>
+  </div>
 
   <div class="links">
 
     <div class="card">
       <h3>Worldwide</h3>
-      <a id="worldwideLink" target="_blank">Generate</a>
+      <a id="worldwideLink" target="_blank">Open Search</a>
     </div>
 
     <div class="card">
       <h3>Australia Only</h3>
-      <a id="auLink" target="_blank">Generate</a>
+      <a id="auLink" target="_blank">Open Search</a>
     </div>
 
   </div>
@@ -115,70 +156,50 @@ function buildUrls(input) {
   const raw = input.trim();
   const encoded = encodeURIComponent(raw);
 
-  const hasGraded =
-    /PSA|BGS|CGC/i.test(raw);
-
+  const hasGraded = /PSA|BGS|CGC/i.test(raw);
   const gradedFlag = hasGraded ? "Yes" : "No";
 
-  const baseWorldwide =
-    `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}` +
-    `&_sacat=0&LH_Sold=1&LH_Complete=1&rt=nc`;
-
-  const baseAustralia =
-    `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}` +
-    `&_sacat=0&LH_Sold=1&LH_Complete=1&rt=nc&LH_PrefLoc=1`;
-
   const worldwide =
-    `${baseWorldwide}&Graded=${gradedFlag}&_dcat=183454`;
+    `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}` +
+    `&_sacat=0&LH_Sold=1&LH_Complete=1&rt=nc&Graded=${gradedFlag}&_dcat=183454`;
 
   const australia =
-    `${baseAustralia}&Graded=${gradedFlag}&_dcat=183454`;
+    `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}` +
+    `&_sacat=0&LH_Sold=1&LH_Complete=1&rt=nc&LH_PrefLoc=1&Graded=${gradedFlag}&_dcat=183454`;
 
-  return {
-    worldwide,
-    australia,
-    gradedFlag
-  };
+  return { worldwide, australia, gradedFlag };
 }
 
 function updateLinks() {
 
   const value = document.getElementById("cardInput").value.trim();
-
   if (!value) return;
 
   localStorage.setItem("pokemonSearch", value);
 
   const urls = buildUrls(value);
 
-  const w = document.getElementById("worldwideLink");
-  const a = document.getElementById("auLink");
-
-  w.href = urls.worldwide;
-  w.innerText = "Open Worldwide Search";
-
-  a.href = urls.australia;
-  a.innerText = "Open Australia Search";
+  document.getElementById("worldwideLink").href = urls.worldwide;
+  document.getElementById("auLink").href = urls.australia;
 
   document.getElementById("status").innerText =
-    "Detected: " + (urls.gradedFlag === "Yes"
-      ? "Graded Cards Only (PSA/BGS/CGC)"
-      : "Raw / Ungraded Cards");
+    urls.gradedFlag === "Yes"
+      ? "Detected: Graded Cards (PSA/BGS/CGC)"
+      : "Detected: Raw Cards";
 }
 
 window.onload = () => {
-
   const saved = localStorage.getItem("pokemonSearch");
-
   if (saved) {
     document.getElementById("cardInput").value = saved;
   }
-
   updateLinks();
 };
 
 document.getElementById("cardInput")
-  .addEventListener("input", updateLinks);
+  .addEventListener("keypress", function(e){
+    if(e.key === "Enter") updateLinks();
+  });
 
 </script>
 
