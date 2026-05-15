@@ -28,21 +28,67 @@
   h2 {
     text-align: center;
     margin-top: 0;
+    margin-bottom: 18px;
   }
 
+  /* TOP BUTTONS */
+  .top-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .top-buttons a {
+    display: block;
+    text-align: center;
+    padding: 12px;
+    background: #0064d2;
+    color: white;
+    text-decoration: none;
+    border-radius: 10px;
+    font-weight: bold;
+  }
+
+  .top-buttons a:hover {
+    background: #0050aa;
+  }
+
+  /* INPUT WRAP */
   .input-wrap {
     position: relative;
   }
 
   input {
     width: 100%;
-    padding: 16px;
+    padding: 16px 42px 16px 16px;
     font-size: 16px;
     border-radius: 10px;
     border: none;
     outline: none;
+    box-sizing: border-box;
   }
 
+  /* CLEAR BUTTON */
+  .clear-btn {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #444;
+    border: none;
+    color: white;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    cursor: pointer;
+  }
+
+  .clear-btn:hover {
+    background: #666;
+  }
+
+  /* SUGGESTIONS */
   .suggestions {
     position: absolute;
     top: 52px;
@@ -65,35 +111,8 @@
     background: #444;
   }
 
-  .links {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    margin-top: 18px;
-  }
-
-  .card {
-    background: #2a2a2a;
-    padding: 16px;
-    border-radius: 12px;
-  }
-
-  a {
-    display: inline-block;
-    margin-top: 10px;
-    padding: 12px 16px;
-    background: #0064d2;
-    color: white;
-    text-decoration: none;
-    border-radius: 8px;
-  }
-
-  a:hover {
-    background: #0050aa;
-  }
-
   .status {
-    margin-top: 12px;
+    margin-top: 14px;
     font-size: 13px;
     color: #6cf;
     text-align: center;
@@ -104,7 +123,7 @@
     margin-top: 14px;
   }
 
-  button {
+  button.reset {
     padding: 10px 14px;
     border: none;
     border-radius: 8px;
@@ -113,12 +132,12 @@
     cursor: pointer;
   }
 
-  button:hover {
+  button.reset:hover {
     background: #666;
   }
 
   @media(max-width:700px){
-    .links {
+    .top-buttons {
       grid-template-columns: 1fr;
     }
   }
@@ -131,33 +150,29 @@
 
   <h2>Pokemon eBay Smart Viewer</h2>
 
+  <!-- TOP BUTTONS -->
+  <div class="top-buttons">
+    <a id="worldwideLink" target="_blank">🌍 Worldwide Search</a>
+    <a id="auLink" target="_blank">🦘 Australia Search</a>
+  </div>
+
+  <!-- INPUT -->
   <div class="input-wrap">
+
     <input id="cardInput"
            placeholder="Enter Pokémon card..."
            value="Gengar 14/132 Holo"
            oninput="update()" />
 
+    <button class="clear-btn" onclick="clearInput()">×</button>
+
     <div class="suggestions" id="suggestions"></div>
-  </div>
-
-  <div class="links">
-
-    <div class="card">
-      <h3>Worldwide</h3>
-      <a id="worldwideLink" target="_blank">Open Search</a>
-    </div>
-
-    <div class="card">
-      <h3>Australia</h3>
-      <a id="auLink" target="_blank">Open Search</a>
-    </div>
-
   </div>
 
   <div class="status" id="status"></div>
 
   <div class="actions">
-    <button onclick="resetHistory()">Reset History</button>
+    <button class="reset" onclick="resetHistory()">Reset History</button>
   </div>
 
 </div>
@@ -173,17 +188,12 @@ function getHistory() {
 function saveHistory(value) {
 
   let history = getHistory();
-
   value = value.trim();
   if (!value) return;
 
-  // remove duplicate
   history = history.filter(x => x !== value);
-
-  // add newest first
   history.unshift(value);
 
-  // limit to 1000
   if (history.length > 1000) {
     history = history.slice(0, 1000);
   }
@@ -232,26 +242,35 @@ function update() {
 function renderSuggestions() {
 
   const history = getHistory();
-  const box = document.getElementById("suggestions");
   const input = document.getElementById("cardInput").value.toLowerCase();
+  const box = document.getElementById("suggestions");
 
   box.innerHTML = "";
 
   if (!input) return;
 
-  const filtered = history
+  history
     .filter(x => x.toLowerCase().includes(input))
-    .slice(0, 10);
+    .slice(0, 10)
+    .forEach(item => {
 
-  filtered.forEach(item => {
-    const div = document.createElement("div");
-    div.innerText = item;
-    div.onclick = () => {
-      document.getElementById("cardInput").value = item;
-      update();
-    };
-    box.appendChild(div);
-  });
+      const div = document.createElement("div");
+      div.innerText = item;
+
+      div.onclick = () => {
+        document.getElementById("cardInput").value = item;
+        update();
+      };
+
+      box.appendChild(div);
+    });
+}
+
+function clearInput() {
+  const input = document.getElementById("cardInput");
+  input.value = "";
+  input.focus();
+  document.getElementById("suggestions").innerHTML = "";
 }
 
 function resetHistory() {
@@ -260,15 +279,13 @@ function resetHistory() {
   document.getElementById("status").innerText = "History cleared ✔";
 }
 
-window.onload = () => {
-  update();
-};
-
 document.addEventListener("click", (e) => {
   if (!document.querySelector(".input-wrap").contains(e.target)) {
     document.getElementById("suggestions").innerHTML = "";
   }
 });
+
+window.onload = update;
 
 </script>
 
