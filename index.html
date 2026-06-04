@@ -24,23 +24,35 @@
     }
     h2 { text-align: center; margin-top: 0; margin-bottom: 18px; }
 
-    .top-buttons {
+    .btn-row {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr 1fr 1fr;
       gap: 10px;
       margin-bottom: 14px;
     }
-    .top-buttons a {
-      display: block;
+    .btn-row a {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
       text-align: center;
-      padding: 12px;
-      background: #0064d2;
+      padding: 11px 8px;
       color: white;
       text-decoration: none;
       border-radius: 10px;
       font-weight: bold;
+      font-size: 14px;
+      transition: filter 0.15s;
     }
-    .top-buttons a:hover { background: #0050aa; }
+    .btn-row a:hover { filter: brightness(1.15); }
+    .btn-row a .btn-sub {
+      font-size: 10px;
+      font-weight: normal;
+      opacity: 0.75;
+    }
+    .btn-sold  { background: #1a56a0; }
+    .btn-cheap { background: #1a7a3c; }
 
     .input-wrap { position: relative; }
     input {
@@ -88,19 +100,8 @@
 
     .status { margin-top: 14px; font-size: 13px; color: #6cf; text-align: center; }
 
-    .actions { text-align: center; margin-top: 14px; }
-    button.reset {
-      padding: 10px 14px;
-      border: none;
-      border-radius: 8px;
-      background: #444;
-      color: white;
-      cursor: pointer;
-    }
-    button.reset:hover { background: #666; }
-
-    @media(max-width:700px){
-      .top-buttons { grid-template-columns: 1fr; }
+    @media(max-width:600px){
+      .btn-row { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -108,9 +109,10 @@
 <div class="box">
   <h2>Pokemon eBay Smart Viewer</h2>
 
-  <div class="top-buttons">
-    <a id="worldwideLink" target="_blank">🌍 Worldwide Search</a>
-    <a id="auLink" target="_blank">🇦🇺 Australia Search</a>
+  <div class="btn-row btn-row-3">
+    <a id="worldwideSoldLink" class="btn-sold" target="_blank">🌍 Worldwide<span class="btn-sub">Last Sold</span></a>
+    <a id="auSoldLink"        class="btn-sold" target="_blank">🇦🇺 Australia<span class="btn-sub">Last Sold</span></a>
+    <a id="worldwideCheapLink" class="btn-cheap" target="_blank">💰 Cheapest<span class="btn-sub">Buy It Now · Worldwide</span></a>
   </div>
 
   <div class="input-wrap">
@@ -120,54 +122,55 @@
   </div>
 
   <div class="status" id="status"></div>
-  <div class="actions">
-    <button class="reset" onclick="resetHistory()">Reset History</button>
-  </div>
 </div>
 
 <script>
-  const KEY = "pokemon_history_1000";
+  const TRAINER_NAMES = ["Ash Ketchum","Leon","Cynthia","Steven Stone","Red","Lance","Diantha","Iris","Alder","Blue / Gary Oak","N","Giovanni","Guzma","Gladion","Cyrus","Silver","Wally","Hop","Marnie","Bede","Nemona","Arven","Penny","Geeta","Rika","Poppy","Larry","Hassel","Lorelei","Bruno","Agatha","Will","Koga","Karen","Sidney","Phoebe","Glacia","Drake","Aaron","Bertha","Flint","Lucian","Shauntal","Marshal","Grimsley","Caitlin","Malva","Wikstrom","Drasna","Siebold","Kahili","Molayne","Olivia","Acerola","Hapu","Brock","Misty","Lt. Surge","Erika","Sabrina","Blaine","Whitney","Bugsy","Morty","Chuck","Jasmine","Pryce","Clair","Roxanne","Brawly","Wattson","Flannery","Norman","Winona","Tate & Liza","Wallace","Juan","Roark","Gardenia","Fantina","Maylene","Crasher Wake","Byron","Candice","Volkner","Cilan","Chili","Cress","Lenora","Burgh","Elesa","Clay","Skyla","Brycen","Drayden","Roxie","Marlon","Cheren","Viola","Grant","Korrina"];
 
-  function getHistory() {
-    return JSON.parse(localStorage.getItem(KEY) || "[]");
-  }
+  const POKEMON_NAMES = ["Bulbasaur","Ivysaur","Venusaur","Charmander","Charmeleon","Charizard","Squirtle","Wartortle","Blastoise","Caterpie","Metapod","Butterfree","Weedle","Kakuna","Beedrill","Pidgey","Pidgeotto","Pidgeot","Rattata","Raticate","Spearow","Fearow","Ekans","Arbok","Pikachu","Raichu","Sandshrew","Sandslash","Nidoran♀","Nidorina","Nidoqueen","Nidoran♂","Nidorino","Nidoking","Clefairy","Clefable","Vulpix","Ninetales","Jigglypuff","Wigglytuff","Zubat","Golbat","Oddish","Gloom","Vileplume","Paras","Parasect","Venonat","Venomoth","Diglett","Dugtrio","Meowth","Persian","Psyduck","Golduck","Mankey","Primeape","Growlithe","Arcanine","Poliwag","Poliwhirl","Poliwrath","Abra","Kadabra","Alakazam","Machop","Machoke","Machamp","Bellsprout","Weepinbell","Victreebel","Tentacool","Tentacruel","Geodude","Graveler","Golem","Ponyta","Rapidash","Slowpoke","Slowbro","Magnemite","Magneton","Farfetch'd","Doduo","Dodrio","Seel","Dewgong","Grimer","Muk","Shellder","Cloyster","Gastly","Haunter","Gengar","Onix","Drowzee","Hypno","Krabby","Kingler","Voltorb","Electrode","Exeggcute","Exeggutor","Cubone","Marowak","Hitmonlee","Hitmonchan","Lickitung","Koffing","Weezing","Rhyhorn","Rhydon","Chansey","Tangela","Kangaskhan","Horsea","Seadra","Goldeen","Seaking","Staryu","Starmie","Mr. Mime","Scyther","Jynx","Electabuzz","Magmar","Pinsir","Tauros","Magikarp","Gyarados","Lapras","Ditto","Eevee","Vaporeon","Jolteon","Flareon","Porygon","Omanyte","Omastar","Kabuto","Kabutops","Aerodactyl","Snorlax","Articuno","Zapdos","Moltres","Dratini","Dragonair","Dragonite","Mewtwo","Mew","Chikorita","Bayleef","Meganium","Cyndaquil","Quilava","Typhlosion","Totodile","Croconaw","Feraligatr","Sentret","Furret","Hoothoot","Noctowl","Ledyba","Ledian","Spinarak","Ariados","Crobat","Chinchou","Lanturn","Pichu","Cleffa","Igglybuff","Togepi","Togetic","Natu","Xatu","Mareep","Flaaffy","Ampharos","Bellossom","Marill","Azumarill","Sudowoodo","Politoed","Hoppip","Skiploom","Jumpluff","Aipom","Sunkern","Sunflora","Yanma","Wooper","Quagsire","Espeon","Umbreon","Murkrow","Slowking","Misdreavus","Unown","Wobbuffet","Girafarig","Pineco","Forretress","Dunsparce","Gligar","Steelix","Snubbull","Granbull","Qwilfish","Scizor","Shuckle","Heracross","Sneasel","Teddiursa","Ursaring","Slugma","Magcargo","Swinub","Piloswine","Corsola","Remoraid","Octillery","Delibird","Mantine","Skarmory","Houndour","Houndoom","Kingdra","Phanpy","Donphan","Porygon2","Stantler","Smeargle","Tyrogue","Hitmontop","Smoochum","Elekid","Magby","Miltank","Blissey","Raikou","Entei","Suicune","Larvitar","Pupitar","Tyranitar","Lugia","Ho-Oh","Celebi","Treecko","Grovyle","Sceptile","Torchic","Combusken","Blaziken","Mudkip","Marshtomp","Swampert","Poochyena","Mightyena","Zigzagoon","Linoone","Wurmple","Silcoon","Beautifly","Cascoon","Dustox","Lotad","Lombre","Ludicolo","Seedot","Nuzleaf","Shiftry","Tailow","Swellow","Wingull","Pelipper","Ralts","Kirlia","Gardevoir","Surskit","Masquerain","Shroomish","Breloom","Slakoth","Vigoroth","Slaking","Nincada","Ninjask","Shedinja","Whismur","Loudred","Exploud","Makuhita","Hariyama","Azurill","Nosepass","Skitty","Delcatty","Sableye","Mawile","Aron","Lairon","Aggron","Meditite","Medicham","Electrike","Manectric","Plusle","Minun","Volbeat","Illumise","Roselia","Gulpin","Swalot","Carvanha","Sharpedo","Wailmer","Wailord","Numel","Camerupt","Torkoal","Spoink","Grumpig","Spinda","Trapinch","Vibrava","Flygon","Cacnea","Cacturne","Swablu","Altaria","Zangoose","Seviper","Lunatone","Solrock","Barboach","Whiscash","Corphish","Crawdaunt","Baltoy","Claydol","Lileep","Cradily","Anorith","Armaldo","Feebas","Milotic","Castform","Kecleon","Shuppet","Banette","Duskull","Dusclops","Tropius","Chimecho","Absol","Wynaut","Snorunt","Glalie","Spheal","Sealeo","Walrein","Clamperl","Huntail","Gorebyss","Relicanth","Luvdisc","Bagon","Shelgon","Salamence","Beldum","Metang","Metagross","Regirock","Regice","Registeel","Latias","Latios","Kyogre","Groudon","Rayquaza","Jirachi","Deoxys","Turtwig","Grotle","Torterra","Chimchar","Monferno","Infernape","Piplup","Prinplup","Empoleon","Starly","Staravia","Staraptor","Bidoof","Bibarel","Kricketot","Kricketune","Shinx","Luxio","Luxray","Budew","Roserade","Cranidos","Rampardos","Shieldon","Bastiodon","Burmy","Wormadam","Mothim","Combee","Vespiquen","Pachirisu","Buizel","Floatzel","Cherubi","Cherrim","Shellos","Gastrodon","Ambipom","Drifloon","Drifblim","Buneary","Lopunny","Mismagius","Honchkrow","Glameow","Purugly","Chingling","Stunky","Skuntank","Bronzor","Bronzong","Bonsly","Mime Jr.","Happiny","Chatot","Spiritomb","Gible","Gabite","Garchomp","Munchlax","Riolu","Lucario","Hippopotas","Hippowdon","Skorupi","Drapion","Croagunk","Toxicroak","Carnivine","Finneon","Lumineon","Mantyke","Snover","Abomasnow","Weavile","Magnezone","Lickilicky","Rhyperior","Tangrowth","Electivire","Magmortar","Togekiss","Yanmega","Leafeon","Glaceon","Gliscor","Mamoswine","Porygon-Z","Gallade","Probopass","Dusknoir","Froslass","Rotom","Uxie","Mesprit","Azelf","Dialga","Palkia","Heatran","Regigigas","Giratina","Cresselia","Phione","Manaphy","Darkrai","Shaymin","Arceus","Victini","Snivy","Servine","Serperior","Tepig","Pignite","Emboar","Oshawott","Dewott","Samurott","Patrat","Watchog","Lillipup","Herdier","Stoutland","Purrloin","Liepard","Pansage","Simisage","Pansear","Simisear","Panpour","Simipour","Munna","Musharna","Pidove","Tranquill","Unfezant","Blitzle","Zebstrika","Roggenrola","Boldore","Gigalith","Woobat","Swoobat","Drilbur","Excadrill","Audino","Timburr","Gurdurr","Conkeldurr","Tympole","Palpitoad","Seismitoad","Throh","Sawk","Sewaddle","Swadloon","Leavanny","Venipede","Whirlipede","Scolipede","Cottonee","Whimsicott","Petilil","Lilligant","Basculin","Sandile","Krokorok","Krookodile","Darumaka","Darmanitan","Maractus","Dwebble","Crustle","Scraggy","Scrafty","Sigilyph","Yamask","Cofagrigus","Tirtouga","Carracosta","Archen","Archeops","Trubbish","Garbodor","Zorua","Zoroark","Minccino","Cinccino","Gothita","Gothorita","Gothitelle","Solosis","Duosion","Reuniclus","Ducklett","Swanna","Vanillite","Vanillish","Vanilluxe","Deerling","Sawsbuck","Emolga","Karrablast","Escavalier","Foongus","Amoonguss","Frillish","Jellicent","Alomomola","Joltik","Galvantula","Ferroseed","Ferrothorn","Klink","Klang","Klinklang","Tynamo","Eelektrik","Eelektross","Elgyem","Beheeyem","Litwick","Lampent","Chandelure","Axew","Fraxure","Haxorus","Cubchoo","Beartic","Cryogonal","Shelmet","Accelgor","Stunfisk","Mienfoo","Mienshao","Druddigon","Golett","Golurk","Pawniard","Bisharp","Bouffalant","Rufflet","Braviary","Vullaby","Mandibuzz","Heatmor","Durant","Deino","Zweilous","Hydreigon","Larvesta","Volcarona","Cobalion","Terrakion","Virizion","Tornadus","Thundurus","Reshiram","Zekrom","Landorus","Kyurem","Keldeo","Meloetta","Genesect","Chespin","Quilladin","Chesnaught","Fennekin","Braixen","Delphox","Froakie","Frogadier","Greninja","Bunnelby","Diggersby","Fletchling","Fletchinder","Talonflame","Scatterbug","Spewpa","Vivillon","Litleo","Pyroar","Flabébé","Floette","Florges","Skiddo","Gogoat","Pancham","Pangoro","Furfrou","Espurr","Meowstic","Honedge","Doublade","Aegislash","Spritzee","Aromatisse","Swirlix","Slurpuff","Inkay","Malamar","Binacle","Barbaracle","Skrelp","Dragalge","Clauncher","Clawitzer","Helioptile","Heliolisk","Tyrunt","Tyrantrum","Amaura","Aurorus","Sylveon","Hawlucha","Dedenne","Carbink","Goomy","Sliggoo","Goodra","Klefki","Phantump","Trevenant","Pumpkaboo","Gourgeist","Bergmite","Avalugg","Noibat","Noivern","Xerneas","Yveltal","Zygarde","Diancie","Hoopa","Volcanion","Rowlet","Dartrix","Decidueye","Litten","Torracat","Incineroar","Popplio","Brionne","Primarina","Pikipek","Trumbeak","Toucannon","Yungoos","Gumshoos","Grubbin","Charjabug","Vikavolt","Crabrawler","Crabominable","Oricorio","Cutiefly","Ribombee","Rockruff","Lycanroc","Wishiwashi","Mareanie","Toxapex","Mudbray","Mudsdale","Dewpider","Araquanid","Fomantis","Lurantis","Morelull","Shiinotic","Salandit","Salazzle","Stufful","Bewear","Bounsweet","Steenee","Tsareena","Comfey","Oranguru","Passimian","Wimpod","Golisopod","Sandygast","Palosand","Pyukumuku","Type: Null","Silvally","Minior","Komala","Turtonator","Togedemaru","Mimikyu","Bruxish","Drampa","Dhelmise","Jangmo-o","Hakamo-o","Kommo-o","Tapu Koko","Tapu Lele","Tapu Bulu","Tapu Fini","Cosmog","Cosmoem","Solgaleo","Lunala","Nihilego","Buzzwole","Pheromosa","Xurkitree","Celesteela","Kartana","Guzzlord","Necrozma","Magearna","Marshadow","Poipole","Naganadel","Stakataka","Blacephalon","Zeraora","Meltan","Melmetal","Grookey","Thwackey","Rillaboom","Scorbunny","Raboot","Cinderace","Sobble","Drizzile","Inteleon","Skwovet","Greedent","Rookidee","Corvisquire","Corviknight","Blipbug","Dottler","Orbeetle","Nickit","Thievul","Gossifleur","Eldegoss","Wooloo","Dubwool","Chewtle","Drednaw","Yamper","Boltund","Rolycoly","Carkol","Coalossal","Applin","Flapple","Appletun","Silicobra","Sandaconda","Cramorant","Arrokuda","Barraskewda","Toxel","Toxtricity","Sizzlipede","Centiskorch","Clobbopus","Grapploct","Sinistea","Polteageist","Hatenna","Hattrem","Hatterene","Impidimp","Morgrem","Grimmsnarl","Obstagoon","Perrserker","Cursola","Sirfetch'd","Mr. Rime","Runerigus","Milcery","Alcremie","Falinks","Pincurchin","Snom","Frosmoth","Stonjourner","Eiscue","Indeedee","Morpeko","Cufant","Copperajah","Dracozolt","Arctozolt","Dracovish","Arctovish","Duraludon","Dreepy","Drakloak","Dragapult","Zacian","Zamazenta","Eternatus","Kubfu","Urshifu","Zarude","Regieleki","Regidrago","Glastrier","Spectrier","Calyrex","Wyrdeer","Kleavor","Ursaluna","Basculegion","Sneasler","Overqwil","Enamorus","Sprigatito","Floragato","Meowscarada","Fuecoco","Crocalor","Skeledirge","Quaxly","Quaxwell","Quaquaval","Lechonk","Oinkologne","Tarountula","Spidops","Nymble","Lokix","Pawmi","Pawmo","Pawmot","Tandemaus","Maushold","Fidough","Dachsbun","Smoliv","Dolliv","Arboliva","Squawkabilly","Nacli","Naclstack","Garganacl","Charcadet","Armarouge","Ceruledge","Tadbulb","Bellibolt","Wattrel","Kilowattrel","Maschiff","Mabosstiff","Shroodle","Grafaiai","Bramblin","Brambleghast","Toedscool","Toadscool","Klawf","Capsakid","Scovillain","Rellor","Rabsca","Flittle","Espathra","Tinkatink","Tinkatuff","Tinkaton","Wiglett","Wugtrio","Bombirdier","Finizen","Palafin","Varoom","Revavroom","Cyclizar","Orthworm","Glimmet","Glimmora","Greavard","Houndstone","Flamigo","Cetoddle","Cetitan","Veluza","Dondozo","Tatsugiri","Annihilape","Clodsire","Farigiraf","Dudunsparce","Kingambit","Great Tusk","Scream Tail","Brute Bonnet","Flutter Mane","Slither Wing","Sandy Shocks","Iron Treads","Iron Bundle","Iron Hands","Iron Jugulis","Iron Moth","Iron Thorns","Frigibax","Arctibax","Baxcalibur","Gimmighoul","Gholdengo","Wo-Chien","Chien-Pao","Ting-Lu","Chi-Yu","Roaring Moon","Iron Valiant","Koraidon","Miraidon","Walking Wake","Iron Leaves","Dipplin","Poltchageist","Sinistcha","Okidogi","Munkidori","Fezandipiti","Ogerpon","Archaludon","Hydrapple","Gouging Fire","Raging Bolt","Iron Boulder","Iron Crown","Terapagos","Pecharunt"];
 
-  function saveHistory(value) {
-    let history = getHistory();
-    value = value.trim();
-    if (!value) return;
-    history = history.filter(x => x !== value);
-    history.unshift(value);
-    if (history.length > 1000) history = history.slice(0, 1000);
-    localStorage.setItem(KEY, JSON.stringify(history));
-  }
-
-  /**
-   * Detects graded cards. Matches:
-   *  - PSA, BGS, CGC, TAG followed by optional space and a number 1–10
-   *    e.g. PSA10, PSA 10, BGS9, BGS 9, TAG10, TAG 10
-   *  - Does NOT match "tag team" or other non-numeric "tag" uses
-   */
   function isGraded(input) {
     return /\b(PSA|BGS|CGC|TAG)\s?(?:10(?:\.0)?|[1-9](?:\.[05])?)\b/i.test(input);
   }
 
+  function normalizeCardNumber(input) {
+    return input.replace(/(\d+)\s+(\d+)(?=\s|$)/, "$1/$2");
+  }
+
+  const CONDITIONS = {
+    lp:   "lightly played",
+    nm:   "near mint",
+    mp:   "moderately played",
+    hp:   "heavily played",
+    dmg:  "damaged"
+  };
+
+  function expandConditions(input) {
+    return input.replace(/\b(lp|nm|mp|hp|dmg)\b/gi, (match) => {
+      const full = CONDITIONS[match.toLowerCase()];
+      return `(${match},${full})`;
+    });
+  }
+
   function buildUrls(input) {
-    const encoded = encodeURIComponent(input);
+    const normalized = expandConditions(normalizeCardNumber(input));
+    const encoded = encodeURIComponent(normalized);
     const gradedFlag = isGraded(input) ? "Yes" : "No";
+    const base = `_sacat=0&Graded=${gradedFlag}&_dcat=183454`;
     return {
-      worldwide: `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&_sacat=0&LH_Sold=1&LH_Complete=1&rt=nc&Graded=${gradedFlag}&_dcat=183454`,
-      australia: `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&_sacat=0&LH_Sold=1&LH_Complete=1&rt=nc&LH_PrefLoc=1&Graded=${gradedFlag}&_dcat=183454`
+      worldwideSold:  `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&${base}&LH_Sold=1&LH_Complete=1&rt=nc`,
+      auSold:         `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&${base}&LH_Sold=1&LH_Complete=1&rt=nc&LH_PrefLoc=1`,
+      worldwideChea:  `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&${base}&LH_BIN=1&_sop=15`
     };
   }
 
   function update() {
     const value = document.getElementById("cardInput").value.trim();
     if (!value) return;
-    saveHistory(value);
     const urls = buildUrls(value);
-    document.getElementById("worldwideLink").href = urls.worldwide;
-    document.getElementById("auLink").href = urls.australia;
+    document.getElementById("worldwideSoldLink").href  = urls.worldwideSold;
+    document.getElementById("auSoldLink").href         = urls.auSold;
+    document.getElementById("worldwideCheapLink").href = urls.worldwideChea;
     document.getElementById("status").innerText = isGraded(value)
       ? "Graded Mode Detected"
       : "Raw Mode";
@@ -175,12 +178,11 @@
   }
 
   function renderSuggestions() {
-    const history = getHistory();
     const input = document.getElementById("cardInput").value.toLowerCase();
     const box = document.getElementById("suggestions");
     box.innerHTML = "";
     if (!input) return;
-    history
+    [...POKEMON_NAMES, ...TRAINER_NAMES]
       .filter(x => x.toLowerCase().includes(input))
       .slice(0, 10)
       .forEach(item => {
@@ -189,6 +191,7 @@
         div.onclick = () => {
           document.getElementById("cardInput").value = item;
           update();
+          box.innerHTML = "";
         };
         box.appendChild(div);
       });
@@ -199,12 +202,6 @@
     input.value = "";
     input.focus();
     document.getElementById("suggestions").innerHTML = "";
-  }
-
-  function resetHistory() {
-    localStorage.removeItem(KEY);
-    document.getElementById("suggestions").innerHTML = "";
-    document.getElementById("status").innerText = "History cleared ✔";
   }
 
   document.addEventListener("click", (e) => {
