@@ -464,16 +464,20 @@
     if (field === "price") item.price = parseFloat(val) || 0;
     if (field === "pct")   item.pct   = parseInt(val)   || 100;
     saveComp();
-    const total = compItems.reduce((s, x) => s + x.price * (x.pct / 100), 0);
-    const el = document.getElementById("compTotal");
-    if (el) el.textContent = `Total: $${total.toFixed(2)}`;
+    const m = compItems.reduce((s, x) => s + x.price, 0);
+    const p = compItems.reduce((s, x) => s + x.price * (x.pct / 100), 0);
+    const em = document.getElementById("compMarket");
+    const ep = document.getElementById("compPayout");
+    if (em) em.textContent = `$${m.toFixed(2)}`;
+    if (ep) ep.textContent = `$${p.toFixed(2)}`;
   }
 
   function renderComp() {
     const section = document.getElementById("compSection");
     if (compItems.length === 0) { section.innerHTML = ""; return; }
 
-    const total = compItems.reduce((s, x) => s + x.price * (x.pct / 100), 0);
+    const marketTotal = compItems.reduce((s, x) => s + x.price, 0);
+    const payoutTotal = compItems.reduce((s, x) => s + x.price * (x.pct / 100), 0);
 
     const pctOpts = v => [100,95,90,85,80,75,70,65,60,55,50]
       .map(p => `<option value="${p}"${p===v?' selected':''}>${p}%</option>`).join("");
@@ -516,8 +520,12 @@
           <tbody>
             ${rows}
             <tr class="comp-total-row">
-              <td colspan="3" id="compTotal">Total: $${total.toFixed(2)}</td>
-              <td></td>
+              <td colspan="2">Market Value</td>
+              <td colspan="2" id="compMarket" style="text-align:right">$${marketTotal.toFixed(2)}</td>
+            </tr>
+            <tr class="comp-total-row">
+              <td colspan="2">Payout Offer</td>
+              <td colspan="2" id="compPayout" style="text-align:right;color:#6f6">$${payoutTotal.toFixed(2)}</td>
             </tr>
           </tbody>
         </table>
