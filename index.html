@@ -22,6 +22,7 @@
       padding: 28px;
       border-radius: 14px;
     }
+
     h2 { text-align: center; margin-top: 0; margin-bottom: 18px; }
 
     .btn-row {
@@ -37,7 +38,8 @@
       justify-content: center;
       gap: 3px;
       text-align: center;
-      padding: 11px 8px;
+      padding: 16px 8px;
+      min-height: 60px;
       color: white;
       text-decoration: none;
       border-radius: 10px;
@@ -110,7 +112,21 @@
     }
 
     @media(max-width:600px){
-      .btn-row { grid-template-columns: 1fr; }
+      body {
+        align-items: flex-end;
+        padding-bottom: 10px;
+        box-sizing: border-box;
+      }
+      .box {
+        width: 100%;
+        max-width: 100%;
+        border-radius: 14px;
+        padding: 18px 16px 24px;
+        margin: 0;
+      }
+      .btn-row { grid-template-columns: 1fr 1fr 1fr; }
+      .btn-row a { font-size: 11px; padding: 16px 4px; }
+      .btn-row a .btn-sub { font-size: 9px; }
     }
   </style>
 </head>
@@ -194,15 +210,22 @@
     box.innerHTML = "";
     if (!input) return;
     [...POKEMON_NAMES, ...TRAINER_NAMES]
-      .filter(x => x.toLowerCase().includes(input))
+      .filter(x => x.toLowerCase().startsWith(input))
       .slice(0, 10)
       .forEach(item => {
         const div = document.createElement("div");
         div.innerText = item;
+        div.onmousedown = (e) => {
+          e.preventDefault();
+        };
         div.onclick = () => {
-          document.getElementById("cardInput").value = item;
+          const cardInput = document.getElementById("cardInput");
+          cardInput.value = item;
           update();
           box.innerHTML = "";
+          cardInput.focus();
+          const len = cardInput.value.length;
+          cardInput.setSelectionRange(len, len);
         };
         box.appendChild(div);
       });
