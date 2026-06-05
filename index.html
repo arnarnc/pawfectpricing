@@ -243,22 +243,26 @@
     }
     .clear-all-btn:hover { background: #5a1818; }
 
-    /* ── Footer ── */
-    footer {
-      position: fixed;
-      bottom: 14px;
-      right: 18px;
+    /* ── Header ── */
+    .header {
       display: flex;
       align-items: center;
-      gap: 8px;
-      font-size: 13px;
-      color: #444;
-      pointer-events: none;
+      justify-content: center;
+      position: relative;
+      margin-bottom: 18px;
     }
-    footer img {
-      height: 39px;
+    .header img {
+      height: 48px;
       width: auto;
-      display: block;
+      position: absolute;
+      left: 0;
+    }
+    .header h2 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: bold;
+      text-align: center;
+      color: white;
     }
 
     /* ── Mobile ── */
@@ -288,6 +292,11 @@
 <body>
 <div class="box">
 
+  <div class="header">
+    <img src="logo.jpg" alt="Pawfect Pulls Collectables" />
+    <h2>Pokemon Comps Tool</h2>
+  </div>
+
   <div class="btn-row">
     <a id="worldwideSoldLink" class="btn-sold" target="_blank">🌍 Worldwide<span class="btn-sub">Last Sold</span></a>
     <a id="auSoldLink"        class="btn-sold" target="_blank">🇦🇺 Australia<span class="btn-sub">Last Sold</span></a>
@@ -313,9 +322,6 @@
 
 </div>
 
-<footer>
-  made by <img src="logo.jpg" alt="Pawfect Pulls Collectables" />
-</footer>
 
 <script>
   const TRAINER_NAMES = ["Ash Ketchum","Leon","Cynthia","Steven Stone","Red","Lance","Diantha","Iris","Alder","Blue / Gary Oak","N","Giovanni","Guzma","Gladion","Cyrus","Silver","Wally","Hop","Marnie","Bede","Nemona","Arven","Penny","Geeta","Rika","Poppy","Larry","Hassel","Lorelei","Bruno","Agatha","Will","Koga","Karen","Sidney","Phoebe","Glacia","Drake","Aaron","Bertha","Flint","Lucian","Shauntal","Marshal","Grimsley","Caitlin","Malva","Wikstrom","Drasna","Siebold","Kahili","Molayne","Olivia","Acerola","Hapu","Brock","Misty","Lt. Surge","Erika","Sabrina","Blaine","Whitney","Bugsy","Morty","Chuck","Jasmine","Pryce","Clair","Roxanne","Brawly","Wattson","Flannery","Norman","Winona","Tate & Liza","Wallace","Juan","Roark","Gardenia","Fantina","Maylene","Crasher Wake","Byron","Candice","Volkner","Cilan","Chili","Cress","Lenora","Burgh","Elesa","Clay","Skyla","Brycen","Drayden","Roxie","Marlon","Cheren","Viola","Grant","Korrina"];
