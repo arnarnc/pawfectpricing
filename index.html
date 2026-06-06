@@ -55,7 +55,7 @@
       opacity: 0.75;
     }
     .btn-sold  { background: #6d3faa; }   /* logo purple */
-    .btn-cheap { background: #b8721a; }  /* logo orange */
+    .btn-cheap { background: #2e7d32; }  /* logo green  */
 
     /* ── Input row ── */
     .input-row {
@@ -129,7 +129,7 @@
       flex: 1;
       padding: 0 14px;
       height: 52px;
-      background: #b8721a;
+      background: #6d3faa;
       color: white;
       border: none;
       border-radius: 10px;
@@ -364,11 +364,17 @@
   function expandProducts(input) {
     return input.replace(/\b(etb|bbx)\b/gi, m => PRODUCTS[m.toLowerCase()]);
   }
+  function isSealedProduct(input) {
+    return /\b(etb|elite trainer box|booster box|bbx|sealed|collection box|tin)\b/i.test(input);
+  }
   function buildUrls(input) {
     const normalized = expandProducts(expandConditions(normalizeCardNumber(input)));
     const encoded = encodeURIComponent(normalized);
     const gradedFlag = isGraded(input) ? "Yes" : "No";
-    const base = `_sacat=0&Graded=${gradedFlag}&_dcat=183454`;
+    // Omit _dcat for sealed products — that category is Singles only and filters them out
+    const base = isSealedProduct(input)
+      ? `_sacat=0`
+      : `_sacat=0&Graded=${gradedFlag}&_dcat=183454`;
     return {
       worldwideSold: `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&${base}&LH_Sold=1&LH_Complete=1&rt=nc`,
       auSold:        `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&${base}&LH_Sold=1&LH_Complete=1&rt=nc&LH_PrefLoc=1`,
