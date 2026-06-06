@@ -379,6 +379,27 @@
     }
     .clear-all-btn:hover { background: rgba(248,113,113,0.08); }
 
+    /* ── Help link ── */
+    .help-link {
+      position: absolute;
+      top: 0; right: 0;
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      color: var(--text3);
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, color 0.15s;
+    }
+    .help-link:hover { background: var(--border2); color: var(--text2); }
+
+    .card { position: relative; }
+
     /* ── Desktop ── */
     @media (min-width: 600px) {
       body {
@@ -392,6 +413,8 @@
 </head>
 <body>
 <div class="card">
+
+  <a href="help.html" class="help-link" title="How to use">?</a>
 
   <!-- Header -->
   <div class="header">

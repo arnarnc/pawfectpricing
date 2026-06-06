@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>How to Use · Pawfect Pulls Pricing</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #09090b;
+      --surface:  #18181b;
+      --surface2: #27272a;
+      --border:   #3f3f46;
+      --border2:  #27272a;
+      --purple:   #7c3aed;
+      --green:    #16a34a;
+      --text:     #fafafa;
+      --text2:    #a1a1aa;
+      --text3:    #71717a;
+      --r:        12px;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 24px 12px 60px;
+    }
+
+    .page {
+      width: 100%;
+      max-width: 460px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    /* Back button */
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text3);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 8px 0;
+      transition: color 0.15s;
+      width: fit-content;
+    }
+    .back-btn:hover { color: var(--text2); }
+    .back-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* Page title */
+    .page-title {
+      padding: 8px 0 18px;
+    }
+    .page-title h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+    .page-title p {
+      font-size: 14px;
+      color: var(--text3);
+      margin-top: 4px;
+    }
+
+    /* Section */
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: var(--r);
+      padding: 18px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .section + .section { margin-top: 6px; }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+      flex-shrink: 0;
+    }
+    .icon.purple { background: rgba(124,58,237,0.15); }
+    .icon.green  { background: rgba(22,163,74,0.15); }
+    .icon.orange { background: rgba(234,88,12,0.15); }
+    .icon.blue   { background: rgba(59,130,246,0.15); }
+
+    .section-header h2 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .section p {
+      font-size: 13px;
+      color: var(--text2);
+      line-height: 1.6;
+    }
+
+    /* Steps */
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .step {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .step-num {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--surface2);
+      color: var(--text3);
+      font-size: 11px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .step p { font-size: 13px; color: var(--text2); line-height: 1.5; }
+    .step p strong { color: var(--text); font-weight: 600; }
+
+    /* Shortcuts */
+    .shortcuts {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .shortcut-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    kbd {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 5px;
+      white-space: nowrap;
+    }
+    .shortcut-arrow {
+      color: var(--text3);
+      font-size: 11px;
+    }
+    .shortcut-row span:last-child {
+      font-size: 12px;
+      color: var(--text2);
+    }
+
+    /* Divider */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border2);
+    }
+
+    /* Note */
+    .note {
+      font-size: 12px;
+      color: var(--text3);
+      background: var(--surface2);
+      border-radius: 8px;
+      padding: 10px 12px;
+      line-height: 1.5;
+    }
+    .note strong { color: var(--text2); }
+
+    /* Desktop */
+    @media (min-width: 600px) {
+      body { padding: 48px 16px 80px; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <a href="index.html" class="back-btn">
+    <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+    Back to Pricing Tool
+  </a>
+
+  <div class="page-title">
+    <h1>How to Use</h1>
+    <p>A quick guide to getting the most out of this tool.</p>
+  </div>
+
+  <!-- Search eBay -->
+  <div class="section">
+    <div class="section-header">
+      <div class="icon purple">🔍</div>
+      <h2>Search eBay</h2>
+    </div>
+    <p>Type a card name or product into the search box, then tap one of the three buttons to open eBay results instantly.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <p><strong>Global Sold</strong> — worldwide sold listings to see what cards have actually sold for.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <p><strong>Australia Sold</strong> — filters to Australian sold listings only for local pricing.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <p><strong>Cheapest</strong> — shows the cheapest active Buy It Now listings globally.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Autocomplete -->
+  <div class="section">
+    <div class="section-header">
+      <div class="icon purple">✨</div>
+      <h2>Autocomplete</h2>
+    </div>
+    <p>Start typing a Pokémon name and a dropdown will suggest matches. Tap a suggestion to fill the search box — it covers all Pokémon and popular trainer names.</p>
+  </div>
+
+  <!-- Shortcuts -->
+  <div class="section">
+    <div class="section-header">
+      <div class="icon orange">⚡</div>
+      <h2>Shortcuts</h2>
+    </div>
+    <p>Type these short codes anywhere in your search and they expand automatically.</p>
+    <hr class="divider">
+    <div class="shortcuts">
+      <div class="shortcut-row"><kbd>etb</kbd><span class="shortcut-arrow">→</span><span>Elite Trainer Box</span></div>
+      <div class="shortcut-row"><kbd>bbx</kbd><span class="shortcut-arrow">→</span><span>Booster Box</span></div>
+      <div class="shortcut-row"><kbd>nm</kbd><span class="shortcut-arrow">→</span><span>Near Mint</span></div>
+      <div class="shortcut-row"><kbd>lp</kbd><span class="shortcut-arrow">→</span><span>Lightly Played</span></div>
+      <div class="shortcut-row"><kbd>mp</kbd><span class="shortcut-arrow">→</span><span>Moderately Played</span></div>
+      <div class="shortcut-row"><kbd>hp</kbd><span class="shortcut-arrow">→</span><span>Heavily Played</span></div>
+      <div class="shortcut-row"><kbd>dmg</kbd><span class="shortcut-arrow">→</span><span>Damaged</span></div>
+    </div>
+    <div class="note"><strong>Tip:</strong> Type <kbd style="background:transparent;border:none;padding:0;font-size:inherit;color:inherit">Charizard 4 102 nm</kbd> and it becomes a smart eBay query automatically.</div>
+  </div>
+
+  <!-- Graded cards -->
+  <div class="section">
+    <div class="section-header">
+      <div class="icon orange">🏆</div>
+      <h2>Graded Cards</h2>
+    </div>
+    <p>Include a grading label and score in your search and the tool automatically switches to Graded Mode, filtering eBay to slabbed cards only.</p>
+    <div class="note"><strong>Examples:</strong> PSA 10 · BGS 9.5 · CGC 9 · TAG 10</div>
+  </div>
+
+  <!-- Comp list -->
+  <div class="section">
+    <div class="section-header">
+      <div class="icon green">📋</div>
+      <h2>Comp List</h2>
+    </div>
+    <p>Build a list of cards with prices to calculate a total buy offer for a collection.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <p>Type the card name in the search box, enter a <strong>$ price</strong>, then tap <strong>+ Add to List</strong>.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <p>Each row shows the card name and an <strong>editable price</strong> you can adjust at any time.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <p>Tap <strong>×</strong> to remove a single row, or <strong>Clear All</strong> to reset the list.</p>
+      </div>
+    </div>
+    <div class="note"><strong>Auto-saved:</strong> Your comp list is stored in the browser and survives page refreshes. It only clears when you delete rows.</div>
+  </div>
+
+  <!-- Payout % -->
+  <div class="section">
+    <div class="section-header">
+      <div class="icon blue">💸</div>
+      <h2>Payout Percentage</h2>
+    </div>
+    <p>The <strong>%</strong> column lets you apply a buy percentage to each card. Use the header dropdown to set the same percentage across every row at once.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <p><strong>Market Value</strong> — total of all raw prices with no discount applied.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <p><strong>Payout Offer</strong> — total after each card's percentage is applied. This is your buy offer.</p>
+      </div>
+    </div>
+    <div class="note"><strong>Example:</strong> $100 @ 80% + $10 @ 70% = $87 payout offer.</div>
+  </div>
+
+</div>
+</body>
+</html>
