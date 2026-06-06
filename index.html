@@ -3,34 +3,102 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Pokemon eBay Smart Viewer</title>
+  <title>Pawfect Pulls · Pricing Tool</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #09090b;
+      --surface:   #18181b;
+      --surface2:  #27272a;
+      --border:    #3f3f46;
+      --border2:   #27272a;
+      --purple:    #7c3aed;
+      --purple-h:  #6d28d9;
+      --green:     #16a34a;
+      --green-h:   #15803d;
+      --text:      #fafafa;
+      --text2:     #a1a1aa;
+      --text3:     #71717a;
+      --r:         12px;
+      --r-sm:      8px;
+    }
+
     body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #000;
-      color: white;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
       display: flex;
       justify-content: center;
-      align-items: center;
-      min-height: 100vh;
+      align-items: flex-start;
+      padding: 33vh 12px 40px;
     }
-    .box {
-      width: 92%;
-      max-width: 820px;
-      background: #111;
-      border: 1px solid #222;
-      padding: 28px;
-      border-radius: 14px;
-      margin: 20px 0 80px;
+
+    .card {
+      width: 100%;
+      max-width: 460px;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 18px;
+      padding: 24px 20px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+    }
+    .header img {
+      height: 72px;
+      width: auto;
+      flex-shrink: 0;
+    }
+    .header-text .brand {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+    .header-text h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
+
+    /* ── Section label ── */
+    .section-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    /* ── Divider ── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border2);
     }
 
     /* ── eBay buttons ── */
+    .ebay-section { display: flex; flex-direction: column; gap: 8px; }
+
     .btn-row {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
-      gap: 10px;
-      margin-bottom: 14px;
+      gap: 8px;
     }
     .btn-row a {
       display: flex;
@@ -38,308 +106,356 @@
       align-items: center;
       justify-content: center;
       gap: 3px;
-      text-align: center;
-      padding: 16px 8px;
-      min-height: 60px;
-      color: white;
+      padding: 13px 6px;
+      color: var(--text);
       text-decoration: none;
-      border-radius: 10px;
-      font-weight: bold;
-      font-size: 14px;
-      transition: filter 0.15s;
+      border-radius: var(--r);
+      font-weight: 600;
+      font-size: 13px;
+      line-height: 1.2;
+      transition: filter 0.15s, transform 0.1s;
+      text-align: center;
     }
-    .btn-row a:hover { filter: brightness(1.15); }
-    .btn-row a .btn-sub {
-      font-size: 10px;
-      font-weight: normal;
-      opacity: 0.75;
-    }
-    .btn-sold  { background: #6d3faa; }   /* logo purple */
-    .btn-cheap { background: #2e7d32; }  /* logo green  */
+    .btn-row a:hover  { filter: brightness(1.12); }
+    .btn-row a:active { transform: scale(0.97); }
+    .btn-row a .btn-icon { font-size: 17px; line-height: 1; }
+    .btn-row a .btn-label { font-size: 12px; font-weight: 600; }
+    .btn-row a .btn-sub   { font-size: 10px; font-weight: 400; opacity: 0.7; }
+    .btn-sold  { background: var(--purple); }
+    .btn-cheap { background: var(--green); }
 
-    /* ── Input row ── */
-    .input-row {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .input-wrap {
-      position: relative;
+    /* ── Search input ── */
+    .search-section { display: flex; flex-direction: column; gap: 8px; }
+
+    .input-wrap { position: relative; }
+    .input-wrap input[type="text"] {
       width: 100%;
-    }
-    .comp-input-row {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-    input[type="text"], input:not([type]) {
-      width: 100%;
-      padding: 16px 42px 16px 16px;
-      font-size: 16px;
-      border-radius: 10px;
-      border: none;
+      background: var(--surface2);
+      border: 1.5px solid var(--border);
+      color: var(--text);
+      padding: 13px 44px 13px 14px;
+      font-size: 15px;
+      font-family: inherit;
+      font-weight: 500;
+      border-radius: var(--r);
       outline: none;
-      box-sizing: border-box;
+      transition: border-color 0.15s;
     }
+    .input-wrap input[type="text"]:focus  { border-color: var(--purple); }
+    .input-wrap input[type="text"]::placeholder { color: var(--text3); font-weight: 400; }
+
     .clear-btn {
       position: absolute;
       right: 12px;
       top: 50%;
       transform: translateY(-50%);
-      background: #444;
+      background: var(--border2);
       border: none;
-      color: white;
-      width: 26px;
-      height: 26px;
+      color: var(--text2);
+      width: 24px;
+      height: 24px;
       border-radius: 50%;
       cursor: pointer;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.1s, color 0.1s;
     }
-    .clear-btn:hover { background: #666; }
+    .clear-btn:hover { background: var(--border); color: var(--text); }
 
-    /* ── Price input ── */
+    .suggestions {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0; right: 0;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 20;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    .suggestions div {
+      padding: 10px 14px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      border-bottom: 1px solid var(--border2);
+      transition: background 0.1s;
+    }
+    .suggestions div:last-child { border-bottom: none; }
+    .suggestions div:hover { background: var(--surface); }
+
+    /* Status badge */
+    .status-wrap { min-height: 18px; }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      padding: 3px 9px;
+      border-radius: 20px;
+    }
+    .status-badge.graded { background: rgba(234,88,12,0.15); color: #fb923c; }
+    .status-badge.raw    { background: rgba(124,58,237,0.15); color: #a78bfa; }
+
+    /* ── Comp entry ── */
+    .comp-entry { display: flex; gap: 8px; align-items: stretch; }
+
     .price-wrap {
       position: relative;
+      width: 100px;
       flex-shrink: 0;
-      width: 110px;
     }
     .price-wrap input[type="number"] {
       width: 100%;
-      padding: 16px 10px 16px 26px;
-      font-size: 16px;
-      border-radius: 10px;
-      border: none;
+      background: var(--surface2);
+      border: 1.5px solid var(--border);
+      color: var(--text);
+      padding: 13px 8px 13px 24px;
+      font-size: 15px;
+      font-family: inherit;
+      font-weight: 500;
+      border-radius: var(--r);
       outline: none;
-      box-sizing: border-box;
       -moz-appearance: textfield;
+      transition: border-color 0.15s;
     }
+    .price-wrap input[type="number"]:focus { border-color: var(--purple); }
     .price-wrap input[type="number"]::-webkit-outer-spin-button,
     .price-wrap input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
     .price-prefix {
       position: absolute;
-      left: 10px;
-      top: 50%;
+      left: 10px; top: 50%;
       transform: translateY(-50%);
-      color: #666;
-      font-size: 16px;
+      color: var(--text3);
+      font-size: 14px;
       pointer-events: none;
+      font-weight: 500;
     }
 
-    /* ── Add to Comp button ── */
-    .add-comp-btn {
+    .add-btn {
       flex: 1;
-      padding: 0 14px;
-      height: 52px;
-      background: #2e7d32;
+      padding: 13px;
+      background: var(--green);
       color: white;
       border: none;
-      border-radius: 10px;
-      font-weight: bold;
-      font-size: 13px;
+      border-radius: var(--r);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
       cursor: pointer;
-      white-space: nowrap;
-      transition: filter 0.15s;
+      letter-spacing: 0.01em;
+      transition: filter 0.15s, transform 0.1s;
     }
-    .add-comp-btn:hover { filter: brightness(1.15); }
+    .add-btn:hover  { filter: brightness(1.1); }
+    .add-btn:active { transform: scale(0.98); }
 
-    /* ── Autocomplete ── */
-    .suggestions {
-      position: absolute;
-      top: 54px;
-      left: 0;
-      right: 0;
-      background: #2a2a2a;
-      border-radius: 10px;
-      max-height: 220px;
-      overflow-y: auto;
-      z-index: 10;
-    }
-    .suggestions div {
-      padding: 10px;
-      cursor: pointer;
-      border-bottom: 1px solid #333;
-    }
-    .suggestions div:hover { background: #444; }
+    /* ── Comp list ── */
+    .comp-list-section { display: flex; flex-direction: column; gap: 12px; }
 
-    /* ── Status ── */
-    .status { margin-top: 14px; font-size: 13px; color: #6cf; text-align: center; }
-
-    /* ── Comp table ── */
-    .comp-section {
-      margin-top: 22px;
-      border-top: 1px solid #2a2a2a;
-      padding-top: 16px;
-    }
     .comp-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 14px;
     }
-    .comp-table th {
+    .comp-table thead th {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 0 6px 8px;
       text-align: left;
-      color: #666;
-      font-weight: normal;
-      font-size: 12px;
-      padding: 4px 8px 8px;
-      border-bottom: 1px solid #2a2a2a;
+      border-bottom: 1px solid var(--border2);
     }
-    .comp-table td {
-      padding: 8px;
-      border-bottom: 1px solid #1e1e1e;
+    .comp-table tbody td {
+      padding: 9px 6px;
+      border-bottom: 1px solid var(--border2);
+      font-size: 13px;
       vertical-align: middle;
     }
-    .comp-table td.card-label {
+    .comp-table tbody tr:last-child td { border-bottom: none; }
+
+    .card-label {
+      color: var(--text);
+      font-weight: 500;
       word-break: break-word;
+      padding-right: 4px;
     }
     .comp-price-input {
-      background: #1e1e1e;
-      border: 1px solid #333;
-      color: white;
-      border-radius: 6px;
-      padding: 6px 10px 6px 22px;
-      font-size: 14px;
-      width: 90px;
-      box-sizing: border-box;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      color: var(--text);
+      border-radius: var(--r-sm);
+      padding: 6px 6px 6px 18px;
+      font-size: 13px;
+      font-family: inherit;
+      font-weight: 500;
+      width: 82px;
       -moz-appearance: textfield;
+      transition: border-color 0.15s;
     }
+    .comp-price-input:focus { outline: none; border-color: var(--purple); }
     .comp-price-input::-webkit-outer-spin-button,
     .comp-price-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
     .price-cell { position: relative; display: inline-block; }
     .price-cell-dollar {
       position: absolute;
-      left: 8px;
-      top: 50%;
+      left: 6px; top: 50%;
       transform: translateY(-50%);
-      color: #666;
-      font-size: 13px;
+      color: var(--text3);
+      font-size: 11px;
       pointer-events: none;
     }
-    .del-btn {
-      background: #2a2a2a;
-      border: none;
-      color: #f87171;
-      width: 30px;
-      height: 30px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 18px;
-      line-height: 1;
-      transition: background 0.1s;
-    }
-    .del-btn:hover { background: #4a1212; }
-    .comp-total-row td {
-      padding-top: 12px;
-      font-weight: bold;
-      color: #6cf;
-      font-size: 15px;
-      border-bottom: none;
-    }
+
     .comp-pct-select {
-      background: #1e1e1e;
-      color: white;
-      border: 1px solid #333;
-      border-radius: 6px;
-      padding: 6px 8px;
-      font-size: 13px;
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border2);
+      border-radius: var(--r-sm);
+      padding: 6px 4px;
+      font-size: 12px;
+      font-family: inherit;
+      font-weight: 500;
       cursor: pointer;
       outline: none;
-      width: 70px;
+      width: 62px;
+      transition: border-color 0.15s;
     }
+    .comp-pct-select:focus { border-color: var(--purple); }
 
-    .clear-all-btn {
-      margin-top: 12px;
-      background: #3a1010;
-      color: #f87171;
-      border: 1px solid #5a2020;
-      padding: 9px 0;
-      border-radius: 8px;
+    .del-btn {
+      background: transparent;
+      border: none;
+      color: var(--text3);
+      width: 28px; height: 28px;
+      border-radius: var(--r-sm);
       cursor: pointer;
-      font-size: 13px;
-      width: 100%;
-      transition: background 0.15s;
-    }
-    .clear-all-btn:hover { background: #5a1818; }
-
-    /* ── Header ── */
-    .header {
+      font-size: 18px;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 12px;
-      margin-bottom: 18px;
+      transition: color 0.1s, background 0.1s;
     }
-    .header img {
-      height: 96px;
-      width: auto;
-      display: block;
-      flex-shrink: 0;
-    }
-    .header h2 {
-      margin: 0;
-      font-size: 22px;
-      font-weight: bold;
-      color: white;
-    }
+    .del-btn:hover { color: #f87171; background: rgba(248,113,113,0.1); }
 
-    /* ── Mobile ── */
-    @media(max-width: 600px) {
+    /* Totals panel */
+    .comp-totals {
+      background: var(--surface2);
+      border-radius: var(--r);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .total-label { font-size: 13px; font-weight: 500; color: var(--text2); }
+    .total-val   { font-size: 16px; font-weight: 700; }
+    .total-row.market .total-val { color: var(--text); }
+    .total-row.payout .total-val { color: #4ade80; }
+    .total-sep { border: none; border-top: 1px solid var(--border2); }
+
+    .clear-all-btn {
+      width: 100%;
+      background: transparent;
+      color: #f87171;
+      border: 1px solid rgba(248,113,113,0.25);
+      padding: 10px;
+      border-radius: var(--r);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      transition: background 0.15s;
+    }
+    .clear-all-btn:hover { background: rgba(248,113,113,0.08); }
+
+    /* ── Desktop ── */
+    @media (min-width: 600px) {
       body {
-        align-items: flex-start;
-        padding-top: 33vh;
-        padding-bottom: 0;
-        box-sizing: border-box;
+        padding-top: 0;
+        align-items: center;
+        justify-content: center;
       }
-      .box {
-        width: 100%;
-        max-width: 100%;
-        border-radius: 14px;
-        padding: 18px 16px 24px;
-        margin: 0 0 20px;
-      }
-      .btn-row { grid-template-columns: 1fr 1fr 1fr; }
-      .btn-row a { font-size: 11px; padding: 16px 4px; }
-      .btn-row a .btn-sub { font-size: 9px; }
-      .input-row { flex-wrap: wrap; }
-      .input-wrap { flex: 1 1 100%; }
-      .price-wrap { flex: 1; }
-      .add-comp-btn { flex: 1; }
+      .card { padding: 32px 28px 36px; gap: 22px; }
     }
   </style>
 </head>
 <body>
-<div class="box">
+<div class="card">
 
+  <!-- Header -->
   <div class="header">
-    <img src="logo-transparent.png" alt="Pawfect Pulls Collectables" />
-    <h2>PRICING</h2>
+    <img src="logo-transparent.png" alt="Pawfect Pulls" />
+    <div class="header-text">
+      <p class="brand">Pawfect Pulls</p>
+      <h1>PRICING</h1>
+    </div>
   </div>
 
-  <div class="btn-row">
-    <a id="worldwideSoldLink" class="btn-sold" target="_blank">🌍 Worldwide<span class="btn-sub">Last Sold</span></a>
-    <a id="auSoldLink"        class="btn-sold" target="_blank">🇦🇺 Australia<span class="btn-sub">Last Sold</span></a>
-    <a id="worldwideCheapLink" class="btn-cheap" target="_blank">💰 Cheapest<span class="btn-sub">Buy It Now · Worldwide</span></a>
+  <hr class="divider">
+
+  <!-- eBay search -->
+  <div class="ebay-section">
+    <p class="section-label">Search eBay</p>
+    <div class="btn-row">
+      <a id="worldwideSoldLink" class="btn-sold" target="_blank">
+        <span class="btn-icon">🌍</span>
+        <span class="btn-label">Global</span>
+        <span class="btn-sub">Sold</span>
+      </a>
+      <a id="auSoldLink" class="btn-sold" target="_blank">
+        <span class="btn-icon">🇦🇺</span>
+        <span class="btn-label">Australia</span>
+        <span class="btn-sub">Sold</span>
+      </a>
+      <a id="worldwideCheapLink" class="btn-cheap" target="_blank">
+        <span class="btn-icon">💰</span>
+        <span class="btn-label">Cheapest</span>
+        <span class="btn-sub">Buy Now</span>
+      </a>
+    </div>
   </div>
 
-  <div class="input-row">
+  <!-- Card search -->
+  <div class="search-section">
     <div class="input-wrap">
-      <input type="text" id="cardInput" placeholder="Enter Pokémon card..." value="Gengar 14/132 Holo" oninput="update()" />
+      <input type="text" id="cardInput"
+        placeholder="e.g. Charizard 4/102 Holo · try etb or bbx too"
+        oninput="update()" autocomplete="off" />
       <button class="clear-btn" onclick="clearInput()">×</button>
       <div class="suggestions" id="suggestions"></div>
     </div>
-    <div class="comp-input-row">
+    <div class="status-wrap" id="status"></div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- Comp entry -->
+  <div class="search-section">
+    <p class="section-label">Add to Comp List</p>
+    <div class="comp-entry">
       <div class="price-wrap">
         <span class="price-prefix">$</span>
         <input type="number" id="priceInput" placeholder="0.00" min="0" step="0.01" />
       </div>
-      <button class="add-comp-btn" onclick="addToComp()">Add to Comp</button>
+      <button class="add-btn" onclick="addToComp()">+ Add to List</button>
     </div>
   </div>
 
-  <div class="status" id="status"></div>
-
+  <!-- Comp list -->
   <div id="compSection"></div>
 
 </div>
-
 
 <script>
   const TRAINER_NAMES = ["Ash Ketchum","Leon","Cynthia","Steven Stone","Red","Lance","Diantha","Iris","Alder","Blue / Gary Oak","N","Giovanni","Guzma","Gladion","Cyrus","Silver","Wally","Hop","Marnie","Bede","Nemona","Arven","Penny","Geeta","Rika","Poppy","Larry","Hassel","Lorelei","Bruno","Agatha","Will","Koga","Karen","Sidney","Phoebe","Glacia","Drake","Aaron","Bertha","Flint","Lucian","Shauntal","Marshal","Grimsley","Caitlin","Malva","Wikstrom","Drasna","Siebold","Kahili","Molayne","Olivia","Acerola","Hapu","Brock","Misty","Lt. Surge","Erika","Sabrina","Blaine","Whitney","Bugsy","Morty","Chuck","Jasmine","Pryce","Clair","Roxanne","Brawly","Wattson","Flannery","Norman","Winona","Tate & Liza","Wallace","Juan","Roark","Gardenia","Fantina","Maylene","Crasher Wake","Byron","Candice","Volkner","Cilan","Chili","Cress","Lenora","Burgh","Elesa","Clay","Skyla","Brycen","Drayden","Roxie","Marlon","Cheren","Viola","Grant","Korrina"];
@@ -353,10 +469,8 @@
   function normalizeCardNumber(input) {
     return input.replace(/(\d+)\s+(\d+)(?=\s|$)/, "$1/$2");
   }
-  // Condition abbreviations → search as (abbr,full term)
   const CONDITIONS = { lp:"lightly played", nm:"near mint", mp:"moderately played", hp:"heavily played", dmg:"damaged" };
-  // Product abbreviations → replace with full term only
-  const PRODUCTS = { etb:"(etb,elite trainer box)", bbx:"booster box" };
+  const PRODUCTS   = { etb:"(etb,elite trainer box)", bbx:"booster box" };
 
   function expandConditions(input) {
     return input.replace(/\b(lp|nm|mp|hp|dmg)\b/gi, m => `(${m},${CONDITIONS[m.toLowerCase()]})`);
@@ -369,9 +483,8 @@
   }
   function buildUrls(input) {
     const normalized = expandProducts(expandConditions(normalizeCardNumber(input)));
-    const encoded = encodeURIComponent(normalized);
+    const encoded    = encodeURIComponent(normalized);
     const gradedFlag = isGraded(input) ? "Yes" : "No";
-    // Omit _dcat for sealed products — that category is Singles only and filters them out
     const base = isSealedProduct(input)
       ? `_sacat=0`
       : `_sacat=0&Graded=${gradedFlag}&_dcat=183454`;
@@ -384,18 +497,23 @@
 
   function update() {
     const value = document.getElementById("cardInput").value.trim();
-    if (!value) return;
+    const statusEl = document.getElementById("status");
+    if (!value) { statusEl.innerHTML = ""; return; }
     const urls = buildUrls(value);
     document.getElementById("worldwideSoldLink").href  = urls.worldwideSold;
     document.getElementById("auSoldLink").href         = urls.auSold;
     document.getElementById("worldwideCheapLink").href = urls.worldwideChea;
-    document.getElementById("status").innerText = isGraded(value) ? "Graded Mode Detected" : "Raw Mode";
+    if (isGraded(value)) {
+      statusEl.innerHTML = '<span class="status-badge graded">⚡ Graded Card</span>';
+    } else {
+      statusEl.innerHTML = '<span class="status-badge raw">🃏 Raw Card</span>';
+    }
     renderSuggestions();
   }
 
   function renderSuggestions() {
     const input = document.getElementById("cardInput").value.toLowerCase();
-    const box = document.getElementById("suggestions");
+    const box   = document.getElementById("suggestions");
     box.innerHTML = "";
     if (!input) return;
     [...POKEMON_NAMES, ...TRAINER_NAMES]
@@ -422,6 +540,7 @@
     input.value = "";
     input.focus();
     document.getElementById("suggestions").innerHTML = "";
+    document.getElementById("status").innerHTML = "";
   }
 
   document.addEventListener("click", e => {
@@ -429,17 +548,14 @@
       document.getElementById("suggestions").innerHTML = "";
   });
 
-  // ── Comp table ───────────────────────────────────────────
+  // ── Comp list ─────────────────────────────────────────────
   let compItems = JSON.parse(localStorage.getItem("compItems") || "[]");
   let headerPct = 100;
 
   function escHtml(s) {
     return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   }
-
-  function saveComp() {
-    localStorage.setItem("compItems", JSON.stringify(compItems));
-  }
+  function saveComp() { localStorage.setItem("compItems", JSON.stringify(compItems)); }
 
   function addToComp() {
     const label = document.getElementById("cardInput").value.trim();
@@ -498,7 +614,7 @@
     const headerOpts = [100,95,90,85,80,75,70,65,60,55,50]
       .map(p => `<option value="${p}"${p===headerPct?' selected':''}>${p}%</option>`).join("");
 
-    let rows = compItems.map(item => `
+    const rows = compItems.map(item => `
       <tr>
         <td class="card-label">${escHtml(item.label)}</td>
         <td>
@@ -515,38 +631,43 @@
             ${pctOpts(item.pct)}
           </select>
         </td>
-        <td><button class="del-btn" onclick="deleteComp(${item.id})">×</button></td>
+        <td><button class="del-btn" onclick="deleteComp(${item.id})" title="Remove">×</button></td>
       </tr>`).join("");
 
     section.innerHTML = `
-      <div class="comp-section">
+      <hr class="divider">
+      <div class="comp-list-section">
+        <p class="section-label">Comp List · ${compItems.length} item${compItems.length !== 1 ? 's' : ''}</p>
         <table class="comp-table">
           <thead><tr>
             <th>Card</th>
             <th>Price</th>
-            <th><select class="comp-pct-select" onchange="cascadePct(this.value)">
-              <option value="100">%</option>
-              ${headerOpts}
-            </select></th>
+            <th>
+              <select class="comp-pct-select" onchange="cascadePct(this.value)" title="Apply to all rows">
+                <option value="100">% All</option>
+                ${headerOpts}
+              </select>
+            </th>
             <th></th>
           </tr></thead>
-          <tbody>
-            ${rows}
-            <tr class="comp-total-row">
-              <td colspan="2">Market Value</td>
-              <td colspan="2" id="compMarket" style="text-align:right">$${marketTotal.toFixed(2)}</td>
-            </tr>
-            <tr class="comp-total-row">
-              <td colspan="2">Payout Offer</td>
-              <td colspan="2" id="compPayout" style="text-align:right;color:#6f6">$${payoutTotal.toFixed(2)}</td>
-            </tr>
-          </tbody>
+          <tbody>${rows}</tbody>
         </table>
+        <div class="comp-totals">
+          <div class="total-row market">
+            <span class="total-label">Market Value</span>
+            <span class="total-val" id="compMarket">$${marketTotal.toFixed(2)}</span>
+          </div>
+          <hr class="total-sep">
+          <div class="total-row payout">
+            <span class="total-label">Payout Offer</span>
+            <span class="total-val" id="compPayout">$${payoutTotal.toFixed(2)}</span>
+          </div>
+        </div>
         <button class="clear-all-btn" onclick="clearAllComp()">Clear All</button>
       </div>`;
   }
 
-  window.onload = () => { update(); renderComp(); };
+  window.onload = () => { renderComp(); };
 </script>
 </body>
 </html>
