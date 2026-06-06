@@ -353,12 +353,19 @@
   function normalizeCardNumber(input) {
     return input.replace(/(\d+)\s+(\d+)(?=\s|$)/, "$1/$2");
   }
+  // Condition abbreviations → search as (abbr,full term)
   const CONDITIONS = { lp:"lightly played", nm:"near mint", mp:"moderately played", hp:"heavily played", dmg:"damaged" };
+  // Product abbreviations → replace with full term only
+  const PRODUCTS = { etb:"(etb,elite trainer box)", bbx:"booster box" };
+
   function expandConditions(input) {
     return input.replace(/\b(lp|nm|mp|hp|dmg)\b/gi, m => `(${m},${CONDITIONS[m.toLowerCase()]})`);
   }
+  function expandProducts(input) {
+    return input.replace(/\b(etb|bbx)\b/gi, m => PRODUCTS[m.toLowerCase()]);
+  }
   function buildUrls(input) {
-    const normalized = expandConditions(normalizeCardNumber(input));
+    const normalized = expandProducts(expandConditions(normalizeCardNumber(input)));
     const encoded = encodeURIComponent(normalized);
     const gradedFlag = isGraded(input) ? "Yes" : "No";
     const base = `_sacat=0&Graded=${gradedFlag}&_dcat=183454`;
