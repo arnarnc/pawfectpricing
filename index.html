@@ -424,6 +424,82 @@
     }
     .clear-all-btn:hover { background: rgba(248,113,113,0.08); }
 
+    /* ── Section block ── */
+    .section-block { display: flex; flex-direction: column; gap: 12px; }
+
+    .block-hdr {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .icon-add-btn {
+      width: 26px; height: 26px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      color: var(--text3);
+      font-size: 18px;
+      font-weight: 400;
+      line-height: 1;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: border-color 0.15s, color 0.15s;
+      flex-shrink: 0;
+    }
+    .icon-add-btn:hover { border-color: var(--purple); color: var(--purple); }
+
+    /* ── Trade-out inline inputs ── */
+    .trade-name-input {
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      color: var(--text);
+      border-radius: var(--r-sm);
+      padding: 6px 8px;
+      font-size: 12px;
+      font-family: inherit;
+      font-weight: 500;
+      width: 100%;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .trade-name-input:focus { border-color: var(--purple); }
+    .trade-name-input::placeholder { color: var(--text3); font-weight: 400; }
+
+    /* ── Subtotal rows ── */
+    .subtotal-row {
+      background: var(--surface2);
+      border-radius: var(--r);
+      padding: 11px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .subtotal-label { font-size: 12px; font-weight: 500; color: var(--text2); }
+    .subtotal-val   { font-size: 15px; font-weight: 700; }
+    .subtotal-val.orange { color: #fb923c; }
+    .subtotal-val.green  { color: #4ade80; }
+
+    /* ── Settlement ── */
+    .settlement-result {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-radius: var(--r);
+      padding: 14px 16px;
+    }
+    .settlement-result .r-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; }
+    .settlement-result .r-val   { font-size: 20px; font-weight: 800; }
+    .settlement-result.pay-customer { background: rgba(251,146,60,0.1); }
+    .settlement-result.pay-customer .r-label,
+    .settlement-result.pay-customer .r-val   { color: #fb923c; }
+    .settlement-result.pay-vendor   { background: rgba(74,222,128,0.08); }
+    .settlement-result.pay-vendor .r-label,
+    .settlement-result.pay-vendor .r-val     { color: #4ade80; }
+    .settlement-result.even-trade   { background: rgba(124,58,237,0.1); }
+    .settlement-result.even-trade .r-label,
+    .settlement-result.even-trade .r-val     { color: #a78bfa; }
+
     /* ── Help link ── */
     .help-link {
       position: absolute;
@@ -638,6 +714,69 @@
       document.getElementById("suggestions").innerHTML = "";
   });
 
+  // ── Trading Out ───────────────────────────────────────────
+  let tradeItems = JSON.parse(localStorage.getItem("tradeItems") || "[]");
+
+  function saveTrade() { localStorage.setItem("tradeItems", JSON.stringify(tradeItems)); }
+
+  function addTradeItem() {
+    tradeItems.push({ id: Date.now(), name: "", price: 0 });
+    saveTrade();
+    renderComp();
+    setTimeout(() => {
+      const inputs = document.querySelectorAll(".trade-name-input");
+      if (inputs.length) inputs[inputs.length - 1].focus();
+    }, 0);
+  }
+
+  function deleteTrade(id) {
+    tradeItems = tradeItems.filter(x => x.id !== id);
+    saveTrade();
+    renderComp();
+  }
+
+  function updateTradeField(id, field, val) {
+    const item = tradeItems.find(x => x.id === id);
+    if (!item) return;
+    if (field === "name")  item.name  = val;
+    if (field === "price") item.price = parseFloat(val) || 0;
+    saveTrade();
+    refreshSettlement();
+  }
+
+  function refreshSettlement() {
+    const tradeTotal  = tradeItems.reduce((s, x) => s + x.price, 0);
+    const payoutTotal = compItems.reduce((s, x) => s + x.price * (x.pct / 100), 0);
+    const diff = tradeTotal - payoutTotal;
+
+    const tEl = document.getElementById("tradeTotalVal");
+    if (tEl) {
+      tEl.textContent = `$${tradeTotal.toFixed(2)}`;
+      tEl.closest(".subtotal-row").style.display = tradeTotal > 0.005 ? "" : "none";
+    }
+
+    const sEl = document.getElementById("settlementResult");
+    if (!sEl) return;
+
+    const sTradeEl = document.getElementById("settlementTradeVal");
+    if (sTradeEl) {
+      sTradeEl.textContent = `$${tradeTotal.toFixed(2)}`;
+      document.getElementById("settlementTradeLine").style.display = tradeTotal > 0.005 ? "" : "none";
+    }
+
+    const isEven = Math.abs(diff) < 0.005 && tradeTotal > 0.005 && payoutTotal > 0.005;
+    if (isEven) {
+      sEl.className = "settlement-result even-trade";
+      sEl.innerHTML = `<span class="r-label">Direct Trade</span><span class="r-val">Even</span>`;
+    } else if (diff > 0.005) {
+      sEl.className = "settlement-result pay-customer";
+      sEl.innerHTML = `<span class="r-label">Customer to Pay</span><span class="r-val">$${diff.toFixed(2)}</span>`;
+    } else {
+      sEl.className = "settlement-result pay-vendor";
+      sEl.innerHTML = `<span class="r-label">Vendor to Pay</span><span class="r-val">$${Math.abs(diff).toFixed(2)}</span>`;
+    }
+  }
+
   // ── Comp list ─────────────────────────────────────────────
   let compItems = JSON.parse(localStorage.getItem("compItems") || "[]");
   let headerPct = 100;
@@ -673,7 +812,9 @@
 
   function clearAllComp() {
     compItems = [];
+    tradeItems = [];
     saveComp();
+    saveTrade();
     renderComp();
   }
 
@@ -689,6 +830,7 @@
     const ep = document.getElementById("compPayout");
     if (em) em.textContent = `$${m.toFixed(2)}`;
     if (ep) ep.textContent = `$${p.toFixed(2)}`;
+    refreshSettlement();
   }
 
   function renderComp() {
@@ -697,6 +839,8 @@
 
     const marketTotal = compItems.reduce((s, x) => s + x.price, 0);
     const payoutTotal = compItems.reduce((s, x) => s + x.price * (x.pct / 100), 0);
+    const tradeTotal  = tradeItems.reduce((s, x) => s + x.price, 0);
+    const diff = tradeTotal - payoutTotal;
 
     const pctOpts = v => [100,95,90,85,80,75,70,65,60,55,50]
       .map(p => `<option value="${p}"${p===v?' selected':''}>${p}%</option>`).join("");
@@ -704,7 +848,45 @@
     const headerOpts = [100,95,90,85,80,75,70,65,60,55,50]
       .map(p => `<option value="${p}"${p===headerPct?' selected':''}>${p}%</option>`).join("");
 
-    const rows = compItems.map(item => `
+    // ── Trade-out rows ──
+    const tradeRows = tradeItems.map(item => `
+      <tr>
+        <td class="card-label">
+          <input class="trade-name-input" type="text"
+            placeholder="Item name"
+            value="${escHtml(item.name)}"
+            oninput="updateTradeField(${item.id},'name',this.value)"
+            onchange="updateTradeField(${item.id},'name',this.value)" />
+        </td>
+        <td>
+          <span class="price-cell">
+            <span class="price-cell-dollar">$</span>
+            <input class="comp-price-input" type="number" min="0" step="0.01"
+              value="${item.price > 0 ? item.price.toFixed(2) : ''}"
+              placeholder="0.00"
+              oninput="updateTradeField(${item.id},'price',this.value)"
+              onchange="updateTradeField(${item.id},'price',this.value)" />
+          </span>
+        </td>
+        <td><button class="del-btn" onclick="deleteTrade(${item.id})" title="Remove">×</button></td>
+      </tr>`).join("");
+
+    const tradeBodyHtml = tradeItems.length > 0 ? `
+      <table class="comp-table">
+        <thead><tr>
+          <th>Item</th>
+          <th>Value</th>
+          <th></th>
+        </tr></thead>
+        <tbody>${tradeRows}</tbody>
+      </table>
+      <div class="subtotal-row" style="${tradeTotal > 0.005 ? '' : 'display:none'}">
+        <span class="subtotal-label">Total Vendor Trade-Out Value</span>
+        <span class="subtotal-val orange" id="tradeTotalVal">$${tradeTotal.toFixed(2)}</span>
+      </div>` : "";
+
+    // ── Comp rows ──
+    const compRows = compItems.map(item => `
       <tr>
         <td class="card-label">${escHtml(item.label)}</td>
         <td>
@@ -724,37 +906,80 @@
         <td><button class="del-btn" onclick="deleteComp(${item.id})" title="Remove">×</button></td>
       </tr>`).join("");
 
+    // ── Settlement ──
+    // diff = tradeOut - payoutOffer
+    // positive → customer pays (they're getting more than they gave)
+    // negative → vendor pays (they owe more cash on top of the trade)
+    // zero with both values → direct trade; zero with no trade → vendor pays full payout
+    let settlementClass, settlementLabel, settlementVal;
+    const isEven = Math.abs(diff) < 0.005 && tradeTotal > 0.005 && payoutTotal > 0.005;
+    if (isEven) {
+      settlementClass = "even-trade";
+      settlementLabel = "Direct Trade";
+      settlementVal   = "Even";
+    } else if (diff > 0.005) {
+      settlementClass = "pay-customer";
+      settlementLabel = "Customer to Pay";
+      settlementVal   = `$${diff.toFixed(2)}`;
+    } else {
+      settlementClass = "pay-vendor";
+      settlementLabel = "Vendor to Pay";
+      settlementVal   = `$${Math.abs(diff).toFixed(2)}`;
+    }
+
     section.innerHTML = `
       <hr class="divider">
-      <div class="comp-list-section">
-        <p class="section-label">Comp List · ${compItems.length} item${compItems.length !== 1 ? 's' : ''}</p>
+
+      <!-- Vendor Items -->
+      <div class="section-block">
+        <div class="block-hdr">
+          <span class="section-label">Vendor's Items</span>
+          <button class="icon-add-btn" onclick="addTradeItem()" title="Add item">+</button>
+        </div>
+        ${tradeBodyHtml}
+      </div>
+
+      <hr class="divider">
+
+      <!-- Customer Items -->
+      <div class="section-block">
+        <div class="block-hdr">
+          <span class="section-label">Customer's Items</span>
+          <select class="comp-pct-select" onchange="cascadePct(this.value)" title="Apply % to all">
+            <option value="100">% All</option>
+            ${headerOpts}
+          </select>
+        </div>
         <table class="comp-table">
           <thead><tr>
             <th>Card</th>
             <th>Price</th>
-            <th>
-              <select class="comp-pct-select" onchange="cascadePct(this.value)" title="Apply to all rows">
-                <option value="100">% All</option>
-                ${headerOpts}
-              </select>
-            </th>
+            <th>Offer</th>
             <th></th>
           </tr></thead>
-          <tbody>${rows}</tbody>
+          <tbody>${compRows}</tbody>
         </table>
         <div class="comp-totals">
           <div class="total-row market">
-            <span class="total-label">Market Value</span>
+            <span class="total-label">Customer's Items Market Value</span>
             <span class="total-val" id="compMarket">$${marketTotal.toFixed(2)}</span>
           </div>
           <hr class="total-sep">
           <div class="total-row payout">
-            <span class="total-label">Payout Offer</span>
+            <span class="total-label">Customer's Items Payout Offer</span>
             <span class="total-val" id="compPayout">$${payoutTotal.toFixed(2)}</span>
           </div>
         </div>
-        <button class="clear-all-btn" onclick="clearAllComp()">Clear All</button>
-      </div>`;
+      </div>
+
+      <hr class="divider">
+
+      <div class="settlement-result ${settlementClass}" id="settlementResult">
+        <span class="r-label">${settlementLabel}</span>
+        <span class="r-val">${settlementVal}</span>
+      </div>
+
+      <button class="clear-all-btn" onclick="clearAllComp()">Clear Everything</button>`;
   }
 
   window.onload = () => { renderComp(); };
