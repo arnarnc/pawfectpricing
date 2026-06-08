@@ -247,6 +247,7 @@
     }
     .status-badge.graded { background: rgba(234,88,12,0.15); color: #fb923c; }
     .status-badge.raw    { background: rgba(124,58,237,0.15); color: #a78bfa; }
+    .status-badge.sealed { background: rgba(74,222,128,0.15); color: #4ade80; }
 
     /* ── Comp entry ── */
     .comp-entry { display: flex; gap: 8px; align-items: stretch; }
@@ -424,6 +425,36 @@
     }
     .clear-all-btn:hover { background: rgba(248,113,113,0.08); }
 
+    /* ── Saved comp tabs ── */
+    .saved-tabs {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+    .saved-tab {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      background: var(--surface2);
+      color: var(--text2);
+      border: 1px solid var(--border2);
+      border-radius: var(--r-sm);
+      padding: 9px 10px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+    .saved-tab:hover {
+      border-color: var(--purple);
+      color: var(--text);
+      background: rgba(124,58,237,0.1);
+    }
+    .saved-tab:last-child:nth-child(odd) { grid-column: span 2; }
+
+
     /* ── Section block ── */
     .section-block { display: flex; flex-direction: column; gap: 12px; }
 
@@ -541,7 +572,7 @@
   <div class="header">
     <img src="logo-transparent.png" alt="Pawfect Pulls" />
     <div class="header-text">
-      <p class="brand">Pawfect Pulls</p>
+      <p class="brand">Pawfect</p>
       <h1>PRICING</h1>
     </div>
   </div>
@@ -609,6 +640,9 @@
   <!-- Comp list -->
   <div id="compSection"></div>
 
+  <!-- Saved comp sets -->
+  <div id="savedTabsSection"></div>
+
 </div>
 
 <script>
@@ -669,7 +703,9 @@
     document.getElementById("worldwideSoldLink").href  = urls.worldwideSold;
     document.getElementById("auSoldLink").href         = urls.auSold;
     document.getElementById("worldwideCheapLink").href = urls.worldwideChea;
-    if (isGraded(value)) {
+    if (isSealedProduct(value)) {
+      statusEl.innerHTML = '<span class="status-badge sealed">📦 Sealed</span>';
+    } else if (isGraded(value)) {
       statusEl.innerHTML = '<span class="status-badge graded">⚡ Graded Card</span>';
     } else {
       statusEl.innerHTML = '<span class="status-badge raw">🃏 Raw Card</span>';
@@ -810,12 +846,79 @@
     renderComp();
   }
 
-  function clearAllComp() {
+  function saveAndClearComp() {
+    if (compItems.length > 0 || tradeItems.length > 0) {
+      savedComps.unshift({
+        id: Date.now(),
+        label: topCompLabel(compItems),
+        compItems: JSON.parse(JSON.stringify(compItems)),
+        tradeItems: JSON.parse(JSON.stringify(tradeItems))
+      });
+      savedComps.length = Math.min(savedComps.length, 5);
+      saveSavedComps();
+    }
     compItems = [];
     tradeItems = [];
     saveComp();
     saveTrade();
     renderComp();
+  }
+
+  // ── Saved comp sets (queue of last 5, surfaced as tabs) ──
+  // Selecting a tab loads that set straight into the active editor — pre-filled
+  // and fully editable (add/remove items) — same as starting a new comp.
+  let savedComps = JSON.parse(localStorage.getItem("savedComps") || "[]");
+
+  function saveSavedComps() { localStorage.setItem("savedComps", JSON.stringify(savedComps)); }
+
+  function topCompLabel(items) {
+    if (!items || items.length === 0) return "Empty Set";
+    const top = items.reduce((a, b) => (!a || b.price > a.price) ? b : a, null);
+    return top.label;
+  }
+
+  function selectSavedTab(id) {
+    const set = savedComps.find(s => s.id === id);
+    if (!set) return;
+    compItems  = JSON.parse(JSON.stringify(set.compItems));
+    tradeItems = JSON.parse(JSON.stringify(set.tradeItems));
+    headerPct  = compItems.length ? compItems[0].pct : 100;
+    savedComps = savedComps.filter(s => s.id !== id);
+    saveComp();
+    saveTrade();
+    saveSavedComps();
+    renderComp();
+  }
+
+  function clearSavedComps() {
+    if (savedComps.length === 0) return;
+    if (!confirm("Clear all recent comp sets? This cannot be undone.")) return;
+    savedComps = [];
+    saveSavedComps();
+    renderSavedTabs();
+  }
+
+  function renderSavedTabs() {
+    const section = document.getElementById("savedTabsSection");
+    if (compItems.length > 0 || tradeItems.length > 0 || savedComps.length === 0) {
+      section.innerHTML = "";
+      return;
+    }
+
+    const tabs = savedComps.map(s => `
+      <button class="saved-tab" onclick="selectSavedTab(${s.id})" title="Continue ${escHtml(s.label)}">
+        ${escHtml(s.label)}
+      </button>`).join("");
+
+    section.innerHTML = `
+      <hr class="divider">
+      <div class="section-block">
+        <div class="block-hdr">
+          <span class="section-label">Recent Comp Sets</span>
+          <button class="icon-add-btn" onclick="clearSavedComps()" title="Clear all recent comp sets">×</button>
+        </div>
+        <div class="saved-tabs">${tabs}</div>
+      </div>`;
   }
 
   function updateCompField(id, field, val) {
@@ -835,7 +938,7 @@
 
   function renderComp() {
     const section = document.getElementById("compSection");
-    if (compItems.length === 0) { section.innerHTML = ""; return; }
+    if (compItems.length === 0) { section.innerHTML = ""; renderSavedTabs(); return; }
 
     const marketTotal = compItems.reduce((s, x) => s + x.price, 0);
     const payoutTotal = compItems.reduce((s, x) => s + x.price * (x.pct / 100), 0);
@@ -979,10 +1082,12 @@
         <span class="r-val">${settlementVal}</span>
       </div>
 
-      <button class="clear-all-btn" onclick="clearAllComp()">Clear Everything</button>`;
+      <button class="clear-all-btn" onclick="saveAndClearComp()">Save &amp; Clear</button>`;
+
+    renderSavedTabs();
   }
 
-  window.onload = () => { renderComp(); };
+  window.onload = () => { renderComp(); renderSavedTabs(); };
 </script>
 </body>
 </html>
