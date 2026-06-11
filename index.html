@@ -689,8 +689,8 @@
       : `_sacat=0&Graded=${gradedFlag}&_dcat=183454`;
     const binParam = excludeAuctions ? "&LH_BIN=1" : "";
     return {
-      worldwideSold: `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&${base}&LH_Sold=1&LH_Complete=1&rt=nc${binParam}`,
-      auSold:        `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&${base}&LH_Sold=1&LH_Complete=1&rt=nc&LH_PrefLoc=1${binParam}`,
+      worldwideSold: `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&${base}&LH_Sold=1&LH_Complete=1&rt=nc&_sop=13${binParam}`,
+      auSold:        `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&${base}&LH_Sold=1&LH_Complete=1&rt=nc&LH_PrefLoc=1&_sop=13${binParam}`,
       worldwideChea: `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&${base}&LH_BIN=1&_sop=15`
     };
   }
