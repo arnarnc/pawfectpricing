@@ -50,6 +50,14 @@
       gap: 18px;
     }
 
+    /* Desktop mode: anchor the app to the top-left so it sits clear of the
+       eBay popup panels. Normal browser view stays centered (unchanged). */
+    body.desktop-mode {
+      justify-content: flex-start;
+      align-items: flex-start;
+      padding: 20px 16px 40px;
+    }
+
     /* ── Header ── */
     .header {
       display: flex;
@@ -123,6 +131,30 @@
     .btn-row a .btn-sub   { font-size: 10px; font-weight: 400; opacity: 0.7; }
     .btn-sold  { background: var(--purple); }
     .btn-cheap { background: var(--green); }
+
+    /* ── Desktop "Go" mode ── */
+    .go-row { display: grid; grid-template-columns: 3fr 1fr; gap: 8px; }
+    .btn-go, .btn-close {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 13px 6px;
+      color: var(--text);
+      border: none;
+      cursor: pointer;
+      border-radius: var(--r);
+      font-weight: 700;
+      font-size: 14px;
+      font-family: inherit;
+      transition: filter 0.15s, transform 0.1s;
+    }
+    .btn-go    { background: linear-gradient(135deg, var(--purple), var(--green)); }
+    .btn-close { background: var(--border); color: var(--text2); font-weight: 600; font-size: 12px; }
+    .btn-go:hover, .btn-close:hover  { filter: brightness(1.12); }
+    .btn-go:active, .btn-close:active { transform: scale(0.97); }
+    .btn-go .btn-icon { font-size: 17px; }
+    .header-toggles { display: flex; align-items: center; gap: 14px; }
 
     /* ── Auction toggle ── */
     .ebay-header {
@@ -248,6 +280,24 @@
     .status-badge.graded { background: rgba(234,88,12,0.15); color: #fb923c; }
     .status-badge.raw    { background: rgba(124,58,237,0.15); color: #a78bfa; }
     .status-badge.sealed { background: rgba(74,222,128,0.15); color: #4ade80; }
+
+    .pop-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-left: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      padding: 3px 9px;
+      border-radius: 20px;
+      text-decoration: none;
+      background: rgba(56,189,248,0.15);
+      color: #38bdf8;
+      transition: background 0.1s;
+    }
+    .pop-link:hover { background: rgba(56,189,248,0.28); }
 
     /* ── Comp entry ── */
     .comp-entry { display: flex; gap: 8px; align-items: stretch; }
@@ -610,16 +660,26 @@
   <div class="ebay-section">
     <div class="ebay-header">
       <p class="section-label">Search eBay</p>
-      <label class="toggle-row" for="excludeAuctions">
-        <span class="toggle-label">No auctions</span>
-        <span class="toggle-switch">
-          <input type="checkbox" id="excludeAuctions" onchange="onToggleAuctions()" />
-          <span class="toggle-track"></span>
-          <span class="toggle-thumb"></span>
-        </span>
-      </label>
+      <div class="header-toggles">
+        <label class="toggle-row" for="excludeAuctions">
+          <span class="toggle-label">No auctions</span>
+          <span class="toggle-switch">
+            <input type="checkbox" id="excludeAuctions" onchange="onToggleAuctions()" />
+            <span class="toggle-track"></span>
+            <span class="toggle-thumb"></span>
+          </span>
+        </label>
+        <label class="toggle-row" for="desktopMode">
+          <span class="toggle-label">Desktop</span>
+          <span class="toggle-switch">
+            <input type="checkbox" id="desktopMode" onchange="onToggleDesktop()" />
+            <span class="toggle-track"></span>
+            <span class="toggle-thumb"></span>
+          </span>
+        </label>
+      </div>
     </div>
-    <div class="btn-row">
+    <div class="btn-row" id="btnRow">
       <a id="worldwideSoldLink" class="btn-sold" target="_blank">
         <span class="btn-icon">🌍</span>
         <span class="btn-label">Global</span>
@@ -635,6 +695,13 @@
         <span class="btn-label">Cheapest</span>
         <span class="btn-sub">Buy Now</span>
       </a>
+    </div>
+    <div class="go-row" id="goRow" style="display:none">
+      <button class="btn-go" onclick="openAll()">
+        <span class="btn-icon">⚡</span>
+        <span>Compare prices <small style="opacity:.7">(Enter)</small></span>
+      </button>
+      <button class="btn-close" onclick="closeAll()">✕ Close all <small style="opacity:.7">(Esc)</small></button>
     </div>
   </div>
 
@@ -681,6 +748,34 @@
   let excludeAuctions = localStorage.getItem("excludeAuctions") !== "false";
   document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("excludeAuctions").checked = excludeAuctions;
+    applyDesktopMode();
+    // Restore the last typed card so a refresh doesn't lose it.
+    const lastCard = localStorage.getItem("lastCard");
+    if (lastCard) { document.getElementById("cardInput").value = lastCard; update(); }
+    // Keyboard flow: Enter (from the card box) opens all 3; Esc closes them.
+    document.getElementById("cardInput").addEventListener("keydown", e => {
+      // Tab accepts the first suggestion and adds a space to type the next word.
+      if (e.key === "Tab") {
+        const first = document.getElementById("suggestions").querySelector("div");
+        if (first) {
+          e.preventDefault();
+          const ci = e.target;
+          const lastWord = ci.value.split(/\s+/).pop();
+          const prefix = ci.value.slice(0, ci.value.length - lastWord.length);
+          ci.value = prefix + first.innerText + " ";
+          update();
+          ci.setSelectionRange(ci.value.length, ci.value.length);
+        }
+        return;
+      }
+      if (e.key === "Enter" && desktopMode) { e.preventDefault(); openAll(); }
+    });
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape" && Object.keys(openWins).length) {
+        e.preventDefault();
+        closeAll();
+      }
+    });
   });
   function onToggleAuctions() {
     excludeAuctions = document.getElementById("excludeAuctions").checked;
@@ -688,9 +783,98 @@
     update();
   }
 
+  // ── Desktop "Go" mode ─────────────────────────────────────
+  // eBay blocks iframe embedding (X-Frame-Options / CSP frame-ancestors),
+  // so we tile the 3 searches as popup windows in a 2x2 grid and keep
+  // references to them so they can all be closed from the main page.
+  function isDesktopBrowser() {
+    return !/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+      && window.innerWidth >= 1024;
+  }
+  let desktopMode = localStorage.getItem("desktopMode") === null
+    ? isDesktopBrowser()
+    : localStorage.getItem("desktopMode") === "true";
+  let openWins = {};
+
+  function applyDesktopMode() {
+    document.getElementById("desktopMode").checked = desktopMode;
+    document.getElementById("btnRow").style.display = desktopMode ? "none" : "";
+    document.getElementById("goRow").style.display  = desktopMode ? "" : "none";
+    document.body.classList.toggle("desktop-mode", desktopMode);
+  }
+  function onToggleDesktop() {
+    desktopMode = document.getElementById("desktopMode").checked;
+    localStorage.setItem("desktopMode", desktopMode);
+    applyDesktopMode();
+  }
+
+  function openAll() {
+    const value = document.getElementById("cardInput").value.trim();
+    if (!value) { document.getElementById("cardInput").focus(); return; }
+    closeAll(); // close any existing panels before opening a fresh set
+    const urls = buildUrls(value);
+    // Top-to-bottom: World Sold, AU Sold, Cheapest.
+    const order = [
+      { name: "ppGlobal", url: urls.worldwideSold }, // top
+      { name: "ppAU",     url: urls.auSold },         // middle
+      { name: "ppCheap",  url: urls.worldwideChea },  // bottom
+    ];
+    // Reserve a left strip for this app; the 3 eBay searches each take the
+    // full remaining width and full screen height, cascaded by a small offset
+    // so every panel's title bar stays clickable. Geometry is relative to the
+    // primary monitor, so the panels never spill onto a second screen.
+    const aw = screen.availWidth, ah = screen.availHeight;
+    const appW = Math.min(Math.max(Math.round(aw * 0.22), 500), 720);
+    const step = 36;
+    const w = aw - appW - step * 2;
+    const h = ah - step * 2;
+    const panes = order.map((o, i) => ({ ...o, left: appW + i * step, top: i * step, w, h }));
+    let blocked = false;
+    // Open bottom-to-top so the World Sold panel ends up frontmost.
+    [...panes].reverse().forEach(p => {
+      const win = window.open(p.url, p.name,
+        `popup=1,width=${p.w},height=${p.h},left=${p.left},top=${p.top}`);
+      if (win) {
+        // window.open won't resize/move a window it's reusing (same name), so
+        // force the geometry every time to guarantee full height.
+        try { win.moveTo(p.left, p.top); win.resizeTo(p.w, p.h); } catch (e) {}
+        openWins[p.name] = win;
+      } else {
+        blocked = true;
+      }
+    });
+    if (blocked) alert("Allow pop-ups for this site to open all three searches.");
+    window.focus();
+  }
+
+  function closeAll() {
+    Object.values(openWins).forEach(win => { try { win.close(); } catch (e) {} });
+    openWins = {};
+  }
+
   // ── eBay helpers ──────────────────────────────────────────
   function isGraded(input) {
     return /\b(PSA|BGS|CGC|TAG)\s?(?:10(?:\.0)?|[1-9](?:\.[05])?)\b/i.test(input);
+  }
+  // Detect the grading company and build a pop-report link for it.
+  function popReport(input) {
+    const m = input.match(/\b(PSA|BGS|CGC|TAG)\b/i);
+    if (!m) return null;
+    const grader = m[1].toUpperCase();
+    // Strip grader/grade and condition tokens to get a clean card query.
+    const query = normalizeCardNumber(input)
+      .replace(/\b(PSA|BGS|CGC|TAG)\s?(?:10(?:\.0)?|[1-9](?:\.[05])?)\b/ig, "")
+      .replace(/\b(lp|nm|mp|hp|dmg)\b/ig, "")
+      .replace(/\s+/g, " ").trim();
+    const q = encodeURIComponent(query);
+    // PSA exposes a card-search URL; the others open their pop-report page.
+    const urls = {
+      PSA: `https://www.psacard.com/pop/search?q=${q}`,
+      BGS: `https://www.beckett.com/grading/pop-report`,
+      CGC: `https://www.cgccards.com/population-report/`,
+      TAG: `https://my.taggrading.com/pop-report`
+    };
+    return { grader, url: urls[grader] };
   }
   function normalizeCardNumber(input) {
     return input.replace(/(\d+)\s+(\d+)(?=\s|$)/, "$1/$2");
@@ -725,7 +909,8 @@
   function update() {
     const value = document.getElementById("cardInput").value.trim();
     const statusEl = document.getElementById("status");
-    if (!value) { statusEl.innerHTML = ""; return; }
+    localStorage.setItem("lastCard", document.getElementById("cardInput").value);
+    if (!value) { statusEl.innerHTML = ""; closeAll(); return; }
     const urls = buildUrls(value);
     document.getElementById("worldwideSoldLink").href  = urls.worldwideSold;
     document.getElementById("auSoldLink").href         = urls.auSold;
@@ -733,7 +918,9 @@
     if (isSealedProduct(value)) {
       statusEl.innerHTML = '<span class="status-badge sealed">📦 Sealed</span>';
     } else if (isGraded(value)) {
-      statusEl.innerHTML = '<span class="status-badge graded">⚡ Graded Card</span>';
+      const pop = popReport(value);
+      statusEl.innerHTML = '<span class="status-badge graded">⚡ Graded Card</span>'
+        + (pop ? `<a class="pop-link" href="${pop.url}" target="_blank" rel="noopener">📊 ${pop.grader} Pop</a>` : "");
     } else {
       statusEl.innerHTML = '<span class="status-badge raw">🃏 Raw Card</span>';
     }
@@ -741,20 +928,25 @@
   }
 
   function renderSuggestions() {
-    const input = document.getElementById("cardInput").value.toLowerCase();
+    const ci    = document.getElementById("cardInput");
     const box   = document.getElementById("suggestions");
     box.innerHTML = "";
-    if (!input) return;
+    // Match the last word being typed, so suggestions keep working for the
+    // 2nd, 3rd, … name regardless of order (e.g. "pikachu reshiram").
+    const full = ci.value;
+    const lastWord = full.split(/\s+/).pop().toLowerCase();
+    if (!lastWord) return;
+    const prefix = full.slice(0, full.length - lastWord.length);
     [...POKEMON_NAMES, ...TRAINER_NAMES]
-      .filter(x => x.toLowerCase().startsWith(input))
+      .filter(x => x.toLowerCase().startsWith(lastWord))
       .slice(0, 10)
       .forEach(item => {
         const div = document.createElement("div");
         div.innerText = item;
         div.onmousedown = e => e.preventDefault();
         div.onclick = () => {
-          const ci = document.getElementById("cardInput");
-          ci.value = item;
+          // Replace only the last word, keeping the earlier names intact.
+          ci.value = prefix + item;
           update();
           box.innerHTML = "";
           ci.focus();
@@ -770,6 +962,8 @@
     input.focus();
     document.getElementById("suggestions").innerHTML = "";
     document.getElementById("status").innerHTML = "";
+    localStorage.setItem("lastCard", "");
+    closeAll(); // clearing the box closes any open panels
   }
 
   document.addEventListener("click", e => {
