@@ -960,17 +960,17 @@
 
     // Pull a clean card name + collector number out of whatever was typed
     // (grader/condition/marketing noise stripped, promos and punctuation ok).
-    const { name, number } = parseCardQuery(ci.value);
+    const { name, number, total } = parseCardQuery(ci.value);
     const cores = nameCores(name);
     // Skip the network for empty input or a lone one-letter fragment — that
     // would match half the database and isn't a real card search yet.
     if (!cores.length || (cores.length === 1 && cores[0].length < 2)) { cardLookupSeq++; return; }
-    liveCardLookup(name, number);
+    liveCardLookup(name, number, total);
   }
 
   // Turn raw input like "PSA 10 Charizard ex 125/197 reverse holo" into
-  // { name: "charizard ex", number: "125" }. Best-effort and forgiving — it
-  // never throws, so a weird query just yields a looser search.
+  // { name: "charizard ex", number: "125", total: "197" }. Best-effort and
+  // forgiving — it never throws, so a weird query just yields a looser search.
   function parseCardQuery(raw) {
     let s = (raw || "").toLowerCase()
       // Grading company + grade (PSA 10, BGS 9.5, CGC 8 …).
@@ -981,13 +981,17 @@
       .replace(/#/g, " ")
       .replace(/\s+/g, " ")
       .trim();
-    if (!s) return { name: "", number: "" };
+    if (!s) return { name: "", number: "", total: "" };
     const tokens = s.split(" ");
     const numIdx = tokens.findIndex(isNumberToken);
-    if (numIdx === -1) return { name: s, number: "" };
-    const name   = tokens.slice(0, numIdx).join(" ").trim();
-    const number = tokens.slice(numIdx).join("").replace(/\/.*$/, ""); // keep collector #, drop /total
-    return { name, number };
+    if (numIdx === -1) return { name: s, number: "", total: "" };
+    const name = tokens.slice(0, numIdx).join(" ").trim();
+    // Split the collector token into number + set total, e.g. "125/197",
+    // "197", "swsh050". When there's no slash the single value is ambiguous
+    // (could be either), which the query builder handles by searching both.
+    const tok = tokens.slice(numIdx).join("");
+    const m   = tok.match(/^([a-z]*\d+[a-z]?)(?:\/(\d+))?/);
+    return { name, number: m ? m[1] : "", total: (m && m[2]) || "" };
   }
 
   // A collector-number token: pure numbers (4, 125, 125/197) or short
@@ -1090,10 +1094,10 @@
   let cardLookupCtrl  = null;  // AbortController for the pending fetch
   const cardCache = new Map(); // q -> results, so repeats don't refetch
 
-  function liveCardLookup(name, number) {
+  function liveCardLookup(name, number, total) {
     const seq = ++cardLookupSeq;
     const cores = nameCores(name);
-    const q = buildPtcgQuery(cores, number);
+    const q = buildPtcgQuery(cores, number, total);
     if (!q) { paintSuggestions(null, seq); return; }
     if (cardCache.has(q)) { paintSuggestions(cardCache.get(q), seq); return; }
 
@@ -1132,9 +1136,19 @@
   // "dark charizard", "charizard ex", "ex charizard" and "reshiram charizard"
   // (→ Reshiram & Charizard-GX) all match. Cores are alphanumeric, so nothing
   // needs Lucene-escaping.
-  function buildPtcgQuery(cores, number) {
+  function buildPtcgQuery(cores, number, total) {
     const clauses = cores.map(c => `name:*${c}*`);
-    if (number) clauses.push(`number:${number}*`);
+    if (number && total) {
+      // Full "125/197": collector number 125 in a 197-card set — precise.
+      clauses.push(`number:${number}* set.printedTotal:${total}`);
+    } else if (number && /^\d+$/.test(number)) {
+      // Bare numeric "197": could be the collector number OR the set total
+      // ("125/197"), so match either — covers typing the denominator you see.
+      clauses.push(`(number:${number}* OR set.printedTotal:${number})`);
+    } else if (number) {
+      // Alphanumeric promo ("SWSH050", "TG20") — only the collector number.
+      clauses.push(`number:${number}*`);
+    }
     return clauses.join(" ");
   }
 
