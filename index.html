@@ -263,6 +263,28 @@
     }
     .suggestions div:last-child { border-bottom: none; }
     .suggestions div:hover { background: var(--surface); }
+    /* Live card-lookup rows: name on top, number/set below */
+    .suggestions div.card-sug {
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .suggestions .sug-meta {
+      font-size: 12px; font-weight: 500; opacity: 0.6;
+    }
+    .suggestions .sug-num {
+      font-variant-numeric: tabular-nums;
+      color: var(--purple); font-weight: 700;
+    }
+    .suggestions .sug-info {
+      padding: 10px 14px; font-size: 13px; opacity: 0.55;
+      cursor: default; font-weight: 500;
+    }
+    .suggestions .sug-info:hover { background: none; }
+    .suggestions .sug-src {
+      display: inline-block; margin-left: 4px; padding: 0 5px;
+      border-radius: 4px; font-size: 10px; font-weight: 700;
+      letter-spacing: .03em; text-transform: uppercase;
+      background: var(--surface); color: var(--purple); opacity: .85;
+    }
 
     /* Status badge */
     .status-wrap { min-height: 18px; }
@@ -745,7 +767,7 @@
   const POKEMON_NAMES = ["Bulbasaur","Ivysaur","Venusaur","Charmander","Charmeleon","Charizard","Squirtle","Wartortle","Blastoise","Caterpie","Metapod","Butterfree","Weedle","Kakuna","Beedrill","Pidgey","Pidgeotto","Pidgeot","Rattata","Raticate","Spearow","Fearow","Ekans","Arbok","Pikachu","Raichu","Sandshrew","Sandslash","Nidoran♀","Nidorina","Nidoqueen","Nidoran♂","Nidorino","Nidoking","Clefairy","Clefable","Vulpix","Ninetales","Jigglypuff","Wigglytuff","Zubat","Golbat","Oddish","Gloom","Vileplume","Paras","Parasect","Venonat","Venomoth","Diglett","Dugtrio","Meowth","Persian","Psyduck","Golduck","Mankey","Primeape","Growlithe","Arcanine","Poliwag","Poliwhirl","Poliwrath","Abra","Kadabra","Alakazam","Machop","Machoke","Machamp","Bellsprout","Weepinbell","Victreebel","Tentacool","Tentacruel","Geodude","Graveler","Golem","Ponyta","Rapidash","Slowpoke","Slowbro","Magnemite","Magneton","Farfetch'd","Doduo","Dodrio","Seel","Dewgong","Grimer","Muk","Shellder","Cloyster","Gastly","Haunter","Gengar","Onix","Drowzee","Hypno","Krabby","Kingler","Voltorb","Electrode","Exeggcute","Exeggutor","Cubone","Marowak","Hitmonlee","Hitmonchan","Lickitung","Koffing","Weezing","Rhyhorn","Rhydon","Chansey","Tangela","Kangaskhan","Horsea","Seadra","Goldeen","Seaking","Staryu","Starmie","Mr. Mime","Scyther","Jynx","Electabuzz","Magmar","Pinsir","Tauros","Magikarp","Gyarados","Lapras","Ditto","Eevee","Vaporeon","Jolteon","Flareon","Porygon","Omanyte","Omastar","Kabuto","Kabutops","Aerodactyl","Snorlax","Articuno","Zapdos","Moltres","Dratini","Dragonair","Dragonite","Mewtwo","Mew","Chikorita","Bayleef","Meganium","Cyndaquil","Quilava","Typhlosion","Totodile","Croconaw","Feraligatr","Sentret","Furret","Hoothoot","Noctowl","Ledyba","Ledian","Spinarak","Ariados","Crobat","Chinchou","Lanturn","Pichu","Cleffa","Igglybuff","Togepi","Togetic","Natu","Xatu","Mareep","Flaaffy","Ampharos","Bellossom","Marill","Azumarill","Sudowoodo","Politoed","Hoppip","Skiploom","Jumpluff","Aipom","Sunkern","Sunflora","Yanma","Wooper","Quagsire","Espeon","Umbreon","Murkrow","Slowking","Misdreavus","Unown","Wobbuffet","Girafarig","Pineco","Forretress","Dunsparce","Gligar","Steelix","Snubbull","Granbull","Qwilfish","Scizor","Shuckle","Heracross","Sneasel","Teddiursa","Ursaring","Slugma","Magcargo","Swinub","Piloswine","Corsola","Remoraid","Octillery","Delibird","Mantine","Skarmory","Houndour","Houndoom","Kingdra","Phanpy","Donphan","Porygon2","Stantler","Smeargle","Tyrogue","Hitmontop","Smoochum","Elekid","Magby","Miltank","Blissey","Raikou","Entei","Suicune","Larvitar","Pupitar","Tyranitar","Lugia","Ho-Oh","Celebi","Treecko","Grovyle","Sceptile","Torchic","Combusken","Blaziken","Mudkip","Marshtomp","Swampert","Poochyena","Mightyena","Zigzagoon","Linoone","Wurmple","Silcoon","Beautifly","Cascoon","Dustox","Lotad","Lombre","Ludicolo","Seedot","Nuzleaf","Shiftry","Tailow","Swellow","Wingull","Pelipper","Ralts","Kirlia","Gardevoir","Surskit","Masquerain","Shroomish","Breloom","Slakoth","Vigoroth","Slaking","Nincada","Ninjask","Shedinja","Whismur","Loudred","Exploud","Makuhita","Hariyama","Azurill","Nosepass","Skitty","Delcatty","Sableye","Mawile","Aron","Lairon","Aggron","Meditite","Medicham","Electrike","Manectric","Plusle","Minun","Volbeat","Illumise","Roselia","Gulpin","Swalot","Carvanha","Sharpedo","Wailmer","Wailord","Numel","Camerupt","Torkoal","Spoink","Grumpig","Spinda","Trapinch","Vibrava","Flygon","Cacnea","Cacturne","Swablu","Altaria","Zangoose","Seviper","Lunatone","Solrock","Barboach","Whiscash","Corphish","Crawdaunt","Baltoy","Claydol","Lileep","Cradily","Anorith","Armaldo","Feebas","Milotic","Castform","Kecleon","Shuppet","Banette","Duskull","Dusclops","Tropius","Chimecho","Absol","Wynaut","Snorunt","Glalie","Spheal","Sealeo","Walrein","Clamperl","Huntail","Gorebyss","Relicanth","Luvdisc","Bagon","Shelgon","Salamence","Beldum","Metang","Metagross","Regirock","Regice","Registeel","Latias","Latios","Kyogre","Groudon","Rayquaza","Jirachi","Deoxys","Turtwig","Grotle","Torterra","Chimchar","Monferno","Infernape","Piplup","Prinplup","Empoleon","Starly","Staravia","Staraptor","Bidoof","Bibarel","Kricketot","Kricketune","Shinx","Luxio","Luxray","Budew","Roserade","Cranidos","Rampardos","Shieldon","Bastiodon","Burmy","Wormadam","Mothim","Combee","Vespiquen","Pachirisu","Buizel","Floatzel","Cherubi","Cherrim","Shellos","Gastrodon","Ambipom","Drifloon","Drifblim","Buneary","Lopunny","Mismagius","Honchkrow","Glameow","Purugly","Chingling","Stunky","Skuntank","Bronzor","Bronzong","Bonsly","Mime Jr.","Happiny","Chatot","Spiritomb","Gible","Gabite","Garchomp","Munchlax","Riolu","Lucario","Hippopotas","Hippowdon","Skorupi","Drapion","Croagunk","Toxicroak","Carnivine","Finneon","Lumineon","Mantyke","Snover","Abomasnow","Weavile","Magnezone","Lickilicky","Rhyperior","Tangrowth","Electivire","Magmortar","Togekiss","Yanmega","Leafeon","Glaceon","Gliscor","Mamoswine","Porygon-Z","Gallade","Probopass","Dusknoir","Froslass","Rotom","Uxie","Mesprit","Azelf","Dialga","Palkia","Heatran","Regigigas","Giratina","Cresselia","Phione","Manaphy","Darkrai","Shaymin","Arceus","Victini","Snivy","Servine","Serperior","Tepig","Pignite","Emboar","Oshawott","Dewott","Samurott","Patrat","Watchog","Lillipup","Herdier","Stoutland","Purrloin","Liepard","Pansage","Simisage","Pansear","Simisear","Panpour","Simipour","Munna","Musharna","Pidove","Tranquill","Unfezant","Blitzle","Zebstrika","Roggenrola","Boldore","Gigalith","Woobat","Swoobat","Drilbur","Excadrill","Audino","Timburr","Gurdurr","Conkeldurr","Tympole","Palpitoad","Seismitoad","Throh","Sawk","Sewaddle","Swadloon","Leavanny","Venipede","Whirlipede","Scolipede","Cottonee","Whimsicott","Petilil","Lilligant","Basculin","Sandile","Krokorok","Krookodile","Darumaka","Darmanitan","Maractus","Dwebble","Crustle","Scraggy","Scrafty","Sigilyph","Yamask","Cofagrigus","Tirtouga","Carracosta","Archen","Archeops","Trubbish","Garbodor","Zorua","Zoroark","Minccino","Cinccino","Gothita","Gothorita","Gothitelle","Solosis","Duosion","Reuniclus","Ducklett","Swanna","Vanillite","Vanillish","Vanilluxe","Deerling","Sawsbuck","Emolga","Karrablast","Escavalier","Foongus","Amoonguss","Frillish","Jellicent","Alomomola","Joltik","Galvantula","Ferroseed","Ferrothorn","Klink","Klang","Klinklang","Tynamo","Eelektrik","Eelektross","Elgyem","Beheeyem","Litwick","Lampent","Chandelure","Axew","Fraxure","Haxorus","Cubchoo","Beartic","Cryogonal","Shelmet","Accelgor","Stunfisk","Mienfoo","Mienshao","Druddigon","Golett","Golurk","Pawniard","Bisharp","Bouffalant","Rufflet","Braviary","Vullaby","Mandibuzz","Heatmor","Durant","Deino","Zweilous","Hydreigon","Larvesta","Volcarona","Cobalion","Terrakion","Virizion","Tornadus","Thundurus","Reshiram","Zekrom","Landorus","Kyurem","Keldeo","Meloetta","Genesect","Chespin","Quilladin","Chesnaught","Fennekin","Braixen","Delphox","Froakie","Frogadier","Greninja","Bunnelby","Diggersby","Fletchling","Fletchinder","Talonflame","Scatterbug","Spewpa","Vivillon","Litleo","Pyroar","Flabébé","Floette","Florges","Skiddo","Gogoat","Pancham","Pangoro","Furfrou","Espurr","Meowstic","Honedge","Doublade","Aegislash","Spritzee","Aromatisse","Swirlix","Slurpuff","Inkay","Malamar","Binacle","Barbaracle","Skrelp","Dragalge","Clauncher","Clawitzer","Helioptile","Heliolisk","Tyrunt","Tyrantrum","Amaura","Aurorus","Sylveon","Hawlucha","Dedenne","Carbink","Goomy","Sliggoo","Goodra","Klefki","Phantump","Trevenant","Pumpkaboo","Gourgeist","Bergmite","Avalugg","Noibat","Noivern","Xerneas","Yveltal","Zygarde","Diancie","Hoopa","Volcanion","Rowlet","Dartrix","Decidueye","Litten","Torracat","Incineroar","Popplio","Brionne","Primarina","Pikipek","Trumbeak","Toucannon","Yungoos","Gumshoos","Grubbin","Charjabug","Vikavolt","Crabrawler","Crabominable","Oricorio","Cutiefly","Ribombee","Rockruff","Lycanroc","Wishiwashi","Mareanie","Toxapex","Mudbray","Mudsdale","Dewpider","Araquanid","Fomantis","Lurantis","Morelull","Shiinotic","Salandit","Salazzle","Stufful","Bewear","Bounsweet","Steenee","Tsareena","Comfey","Oranguru","Passimian","Wimpod","Golisopod","Sandygast","Palosand","Pyukumuku","Type: Null","Silvally","Minior","Komala","Turtonator","Togedemaru","Mimikyu","Bruxish","Drampa","Dhelmise","Jangmo-o","Hakamo-o","Kommo-o","Tapu Koko","Tapu Lele","Tapu Bulu","Tapu Fini","Cosmog","Cosmoem","Solgaleo","Lunala","Nihilego","Buzzwole","Pheromosa","Xurkitree","Celesteela","Kartana","Guzzlord","Necrozma","Magearna","Marshadow","Poipole","Naganadel","Stakataka","Blacephalon","Zeraora","Meltan","Melmetal","Grookey","Thwackey","Rillaboom","Scorbunny","Raboot","Cinderace","Sobble","Drizzile","Inteleon","Skwovet","Greedent","Rookidee","Corvisquire","Corviknight","Blipbug","Dottler","Orbeetle","Nickit","Thievul","Gossifleur","Eldegoss","Wooloo","Dubwool","Chewtle","Drednaw","Yamper","Boltund","Rolycoly","Carkol","Coalossal","Applin","Flapple","Appletun","Silicobra","Sandaconda","Cramorant","Arrokuda","Barraskewda","Toxel","Toxtricity","Sizzlipede","Centiskorch","Clobbopus","Grapploct","Sinistea","Polteageist","Hatenna","Hattrem","Hatterene","Impidimp","Morgrem","Grimmsnarl","Obstagoon","Perrserker","Cursola","Sirfetch'd","Mr. Rime","Runerigus","Milcery","Alcremie","Falinks","Pincurchin","Snom","Frosmoth","Stonjourner","Eiscue","Indeedee","Morpeko","Cufant","Copperajah","Dracozolt","Arctozolt","Dracovish","Arctovish","Duraludon","Dreepy","Drakloak","Dragapult","Zacian","Zamazenta","Eternatus","Kubfu","Urshifu","Zarude","Regieleki","Regidrago","Glastrier","Spectrier","Calyrex","Wyrdeer","Kleavor","Ursaluna","Basculegion","Sneasler","Overqwil","Enamorus","Sprigatito","Floragato","Meowscarada","Fuecoco","Crocalor","Skeledirge","Quaxly","Quaxwell","Quaquaval","Lechonk","Oinkologne","Tarountula","Spidops","Nymble","Lokix","Pawmi","Pawmo","Pawmot","Tandemaus","Maushold","Fidough","Dachsbun","Smoliv","Dolliv","Arboliva","Squawkabilly","Nacli","Naclstack","Garganacl","Charcadet","Armarouge","Ceruledge","Tadbulb","Bellibolt","Wattrel","Kilowattrel","Maschiff","Mabosstiff","Shroodle","Grafaiai","Bramblin","Brambleghast","Toedscool","Toadscool","Klawf","Capsakid","Scovillain","Rellor","Rabsca","Flittle","Espathra","Tinkatink","Tinkatuff","Tinkaton","Wiglett","Wugtrio","Bombirdier","Finizen","Palafin","Varoom","Revavroom","Cyclizar","Orthworm","Glimmet","Glimmora","Greavard","Houndstone","Flamigo","Cetoddle","Cetitan","Veluza","Dondozo","Tatsugiri","Annihilape","Clodsire","Farigiraf","Dudunsparce","Kingambit","Great Tusk","Scream Tail","Brute Bonnet","Flutter Mane","Slither Wing","Sandy Shocks","Iron Treads","Iron Bundle","Iron Hands","Iron Jugulis","Iron Moth","Iron Thorns","Frigibax","Arctibax","Baxcalibur","Gimmighoul","Gholdengo","Wo-Chien","Chien-Pao","Ting-Lu","Chi-Yu","Roaring Moon","Iron Valiant","Koraidon","Miraidon","Walking Wake","Iron Leaves","Dipplin","Poltchageist","Sinistcha","Okidogi","Munkidori","Fezandipiti","Ogerpon","Archaludon","Hydrapple","Gouging Fire","Raging Bolt","Iron Boulder","Iron Crown","Terapagos","Pecharunt"];
 
   // ── Auction toggle ────────────────────────────────────────
-  let excludeAuctions = localStorage.getItem("excludeAuctions") !== "false";
+  let excludeAuctions = localStorage.getItem("excludeAuctions") === "true";
   document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("excludeAuctions").checked = excludeAuctions;
     applyDesktopMode();
@@ -756,13 +778,13 @@
     document.getElementById("cardInput").addEventListener("keydown", e => {
       // Tab accepts the first suggestion and adds a space to type the next word.
       if (e.key === "Tab") {
-        const first = document.getElementById("suggestions").querySelector("div");
+        const first = document.getElementById("suggestions").querySelector("div[data-fill]");
         if (first) {
           e.preventDefault();
           const ci = e.target;
-          const lastWord = ci.value.split(/\s+/).pop();
-          const prefix = ci.value.slice(0, ci.value.length - lastWord.length);
-          ci.value = prefix + first.innerText + " ";
+          // data-fill already holds the full canonical value (earlier names
+          // preserved for species rows, "Name number/total" for card rows).
+          ci.value = first.dataset.fill + " ";
           update();
           ci.setSelectionRange(ci.value.length, ci.value.length);
         }
@@ -928,32 +950,255 @@
   }
 
   function renderSuggestions() {
-    const ci    = document.getElementById("cardInput");
-    const box   = document.getElementById("suggestions");
+    const ci  = document.getElementById("cardInput");
+    if (!ci.value.trim()) { cardLookupSeq++; document.getElementById("suggestions").innerHTML = ""; return; }
+
+    // Instant paint: saved "gap" cards + offline name list + a save action.
+    // Keeps the dropdown useful immediately while the network request runs and
+    // is the seamless fallback if the APIs are slow, empty, or down.
+    paintSuggestions(null, null);
+
+    // Pull a clean card name + collector number out of whatever was typed
+    // (grader/condition/marketing noise stripped, promos and punctuation ok).
+    const { name, number } = parseCardQuery(ci.value);
+    const cores = nameCores(name);
+    // Skip the network for empty input or a lone one-letter fragment — that
+    // would match half the database and isn't a real card search yet.
+    if (!cores.length || (cores.length === 1 && cores[0].length < 2)) { cardLookupSeq++; return; }
+    liveCardLookup(name, number);
+  }
+
+  // Turn raw input like "PSA 10 Charizard ex 125/197 reverse holo" into
+  // { name: "charizard ex", number: "125" }. Best-effort and forgiving — it
+  // never throws, so a weird query just yields a looser search.
+  function parseCardQuery(raw) {
+    let s = (raw || "").toLowerCase()
+      // Grading company + grade (PSA 10, BGS 9.5, CGC 8 …).
+      .replace(/\b(psa|bgs|cgc|sgc|tag)\s*\.?\s*(?:10(?:\.0)?|[1-9](?:\.[05])?)\b/g, " ")
+      // Condition shorthand and common marketing words.
+      .replace(/\b(gem\s*mint|mint|near\s*mint|nm|lightly\s*played|lp|moderately\s*played|mp|heavily\s*played|hp|damaged|dmg|raw|graded|sealed)\b/g, " ")
+      .replace(/\b(1st\s*ed(?:ition)?|first\s*ed(?:ition)?|shadowless|unlimited|reverse\s*holo|rev\s*holo|holo(?:foil)?|foil|promo|full\s*art|alt(?:ernate)?\s*art|secret\s*rare)\b/g, " ")
+      .replace(/#/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!s) return { name: "", number: "" };
+    const tokens = s.split(" ");
+    const numIdx = tokens.findIndex(isNumberToken);
+    if (numIdx === -1) return { name: s, number: "" };
+    const name   = tokens.slice(0, numIdx).join(" ").trim();
+    const number = tokens.slice(numIdx).join("").replace(/\/.*$/, ""); // keep collector #, drop /total
+    return { name, number };
+  }
+
+  // A collector-number token: pure numbers (4, 125, 125/197) or short
+  // alpha-prefixed promos (SWSH284, TG20, GG70, H31). Names like "ex", "vmax",
+  // "porygon2" deliberately do NOT match so they stay part of the name.
+  function isNumberToken(t) {
+    return /^\d+[a-z]?(?:\/\d+)?$/.test(t) || /^[a-z]{1,5}\d+[a-z]?(?:\/\d+)?$/.test(t);
+  }
+
+  // Break a name into lowercase alphanumeric "cores" for wildcard matching.
+  // Splits on spaces AND punctuation ("Ho-Oh" → ho, oh; "Mr. Mime" → mr, mime)
+  // so hyphens/dots/apostrophes never block a match. Sub-words shorter than 2
+  // chars are dropped except the final one (the prefix the user is still typing).
+  function nameCores(name) {
+    const words = (name || "").trim().split(/\s+/).filter(Boolean);
+    const cores = [];
+    words.forEach((w, wi) => {
+      const subs = w.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+      subs.forEach((sub, si) => {
+        const isFinal = wi === words.length - 1 && si === subs.length - 1;
+        if (sub.length >= 2 || isFinal) cores.push(sub.toLowerCase());
+      });
+    });
+    return cores;
+  }
+
+  // ── Dropdown painter ──────────────────────────────────────
+  // One place builds the dropdown: the live API results, or the offline name
+  // list when there are none (also the seamless fallback if the APIs are slow,
+  // empty, or down). apiResults: array to show, or null for the offline list.
+  // seq: null for the instant paint, or the lookup's seq for async paints (a
+  // stale async paint is dropped so it can't overwrite newer input).
+  function paintSuggestions(apiResults, seq) {
+    if (seq !== null && seq !== cardLookupSeq) return;
+    const ci  = document.getElementById("cardInput");
+    const box = document.getElementById("suggestions");
     box.innerHTML = "";
-    // Match the last word being typed, so suggestions keep working for the
-    // 2nd, 3rd, … name regardless of order (e.g. "pikachu reshiram").
-    const full = ci.value;
-    const lastWord = full.split(/\s+/).pop().toLowerCase();
+    if (apiResults && apiResults.length) {
+      apiResults.forEach(r => box.appendChild(makeCardRow(r)));
+    } else {
+      appendOfflineNames(box, ci.value);
+    }
+  }
+
+  // Cheap, offline last-word autocomplete over the bundled species/trainer
+  // name lists. Appends to the box (does not clear it).
+  function appendOfflineNames(box, raw) {
+    const lastWord = raw.split(/\s+/).pop().toLowerCase();
     if (!lastWord) return;
-    const prefix = full.slice(0, full.length - lastWord.length);
+    const prefix = raw.slice(0, raw.length - lastWord.length);
     [...POKEMON_NAMES, ...TRAINER_NAMES]
       .filter(x => x.toLowerCase().startsWith(lastWord))
       .slice(0, 10)
       .forEach(item => {
         const div = document.createElement("div");
         div.innerText = item;
+        div.dataset.fill = prefix + item;          // keep earlier names intact
         div.onmousedown = e => e.preventDefault();
-        div.onclick = () => {
-          // Replace only the last word, keeping the earlier names intact.
-          ci.value = prefix + item;
-          update();
-          box.innerHTML = "";
-          ci.focus();
-          ci.setSelectionRange(ci.value.length, ci.value.length);
-        };
+        div.onclick = () => fillFromSuggestion(prefix + item);
         box.appendChild(div);
       });
+  }
+
+  function makeCardRow(r) {
+    const fill = `${r.name} ${r.num}`;
+    const div = document.createElement("div");
+    div.className = "card-sug";
+    div.dataset.fill = fill;
+    div.innerHTML =
+      `<span class="sug-name">${escapeHtml(r.name)}</span>`
+      + `<span class="sug-meta"><span class="sug-num">${escapeHtml(r.num)}</span>`
+      + (r.set ? ` · ${escapeHtml(r.set)}` : "")
+      + (r.src === "intl" ? ` <span class="sug-src">intl</span>` : "")
+      + `</span>`;
+    div.onmousedown = e => e.preventDefault();
+    div.onclick = () => fillFromSuggestion(fill);
+    return div;
+  }
+
+  // Drop a suggestion into the box, run the app, and close the dropdown —
+  // cancelling any in-flight lookup so it can't re-open the menu after select.
+  function fillFromSuggestion(value) {
+    const ci = document.getElementById("cardInput");
+    ci.value = value;
+    update();
+    cardLookupSeq++;                 // invalidate the lookup update() just queued
+    clearTimeout(cardLookupTimer);
+    document.getElementById("suggestions").innerHTML = "";
+    ci.focus();
+    ci.setSelectionRange(ci.value.length, ci.value.length);
+  }
+
+  // ── Live card lookup (pokemontcg.io) ──────────────────────
+  // Debounced, server-side filtered autocomplete on name (+ optional collector
+  // number), so "charizard 12" lists Charizards numbered 12*, "blaine" lists
+  // every Blaine card, and "blaine's c" narrows to Blaine's Charizard — each
+  // with its full "number/printedTotal · set" string for eBay comps.
+  let cardLookupSeq   = 0;     // bumps to drop stale/aborted responses
+  let cardLookupTimer = null;
+  let cardLookupCtrl  = null;  // AbortController for the pending fetch
+  const cardCache = new Map(); // q -> results, so repeats don't refetch
+
+  function liveCardLookup(name, number) {
+    const seq = ++cardLookupSeq;
+    const cores = nameCores(name);
+    const q = buildPtcgQuery(cores, number);
+    if (!q) { paintSuggestions(null, seq); return; }
+    if (cardCache.has(q)) { paintSuggestions(cardCache.get(q), seq); return; }
+
+    clearTimeout(cardLookupTimer);
+    cardLookupTimer = setTimeout(() => {
+      if (cardLookupCtrl) cardLookupCtrl.abort();
+      cardLookupCtrl = new AbortController();
+      const signal = cardLookupCtrl.signal;
+      // Primary: pokemontcg.io (exact "number/total · set"). If it errors OR
+      // finds nothing, fall through to TCGdex (broader / Japanese-origin sets).
+      // So either API can be down and the other still answers.
+      let ptcgFailed = false;
+      fetchPtcg(q, signal)
+        .catch(err => {
+          if (err && err.name === "AbortError") throw err; // superseded — bubble up
+          ptcgFailed = true;
+          return [];
+        })
+        .then(results => results.length ? results : fetchTcgdex(cores, number, signal))
+        .then(results => {
+          // Don't cache a transient failure as an authoritative empty result.
+          if (results.length || !ptcgFailed) cardCache.set(q, results);
+          // results may be []; paintSuggestions then shows saved + offline + save.
+          paintSuggestions(results, seq);
+        })
+        .catch(err => {
+          if (err && err.name === "AbortError") return; // superseded by a newer keystroke
+          // Any other failure is swallowed entirely — fall back to the offline
+          // view (saved cards + names + save action); the app is untouched.
+          paintSuggestions(null, seq);
+        });
+    }, 250);
+  }
+
+  // AND of per-word "contains" wildcards so word order and extras don't matter:
+  // "dark charizard", "charizard ex", "ex charizard" and "reshiram charizard"
+  // (→ Reshiram & Charizard-GX) all match. Cores are alphanumeric, so nothing
+  // needs Lucene-escaping.
+  function buildPtcgQuery(cores, number) {
+    const clauses = cores.map(c => `name:*${c}*`);
+    if (number) clauses.push(`number:${number}*`);
+    return clauses.join(" ");
+  }
+
+  function fetchPtcg(q, signal) {
+    const url = "https://api.pokemontcg.io/v2/cards?pageSize=20&orderBy=-set.releaseDate"
+      + "&select=id,name,number,set&q=" + encodeURIComponent(q);
+    return fetch(url, { signal })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error("ptcg " + r.status)))
+      .then(j => (j.data || []).map(c => ({
+        name: c.name,
+        num:  (c.set && c.set.printedTotal) ? `${c.number}/${c.set.printedTotal}` : c.number,
+        set:  c.set ? c.set.name : "",
+        src:  "",
+      })));
+  }
+
+  // TCGdex English fallback — covers sets pokemontcg.io misses (incl. many
+  // Japanese-origin cards). Server-side filter on the longest name word, then
+  // refine client-side by every word + number. Self-contained: any failure
+  // resolves to [] so it can never break the primary flow.
+  function fetchTcgdex(cores, number, signal) {
+    const key = cores.slice().sort((a, b) => b.length - a.length)[0];
+    if (!key || key.length < 2) return Promise.resolve([]);
+    return fetch("https://api.tcgdex.net/v2/en/cards?name=" + encodeURIComponent(key), { signal })
+      .then(r => r.ok ? r.json() : [])
+      .then(list => {
+        if (!Array.isArray(list)) return [];
+        const num = (number || "").toLowerCase();
+        const matched = list.filter(c => {
+          const n = (c.name || "").toLowerCase();
+          return cores.every(core => n.includes(core))
+            && (!num || String(c.localId).toLowerCase().startsWith(num));
+        }).slice(0, 15);
+        // Enrich each with set name + total (best-effort, cached per set).
+        return Promise.all(matched.map(c =>
+          tcgdexSetInfo(setIdOf(c.id), signal).then(si => ({
+            name: c.name,
+            num:  (si && si.total) ? `${c.localId}/${si.total}` : String(c.localId),
+            set:  (si && si.name) ? si.name : "",
+            src:  "intl",
+          }))
+        ));
+      })
+      .catch(() => []);
+  }
+
+  function setIdOf(id) { return String(id || "").replace(/-[^-]*$/, ""); }
+  const tcgdexSetCache = new Map();
+  function tcgdexSetInfo(setId, signal) {
+    if (!setId) return Promise.resolve(null);
+    if (tcgdexSetCache.has(setId)) return Promise.resolve(tcgdexSetCache.get(setId));
+    return fetch("https://api.tcgdex.net/v2/en/sets/" + encodeURIComponent(setId), { signal })
+      .then(r => r.ok ? r.json() : null)
+      .then(s => {
+        const info = s ? { name: s.name, total: s.cardCount && (s.cardCount.official || s.cardCount.total) } : null;
+        tcgdexSetCache.set(setId, info);
+        return info;
+      })
+      .catch(() => null);
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
   function clearInput() {
