@@ -955,42 +955,47 @@
 
   function renderSuggestions() {
     const ci  = document.getElementById("cardInput");
-    if (!ci.value.trim()) { cardLookupSeq++; document.getElementById("suggestions").innerHTML = ""; return; }
-
-    // Instant paint: offline name list. Keeps the dropdown useful immediately
-    // and is the seamless fallback if the local dataset and APIs all miss.
-    paintSuggestions(null, null);
+    if (!ci.value.trim()) { closeSuggestions(); return; }
 
     // Pull a clean card name + collector number out of whatever was typed
     // (grader/condition/marketing noise stripped, promos and punctuation ok).
     const { name, number, total } = parseCardQuery(ci.value);
     const cores = nameCores(name);
-    // Skip the search for empty input or a lone one-letter fragment — that
-    // would match half the database and isn't a real card search yet.
-    if (!cores.length || (cores.length === 1 && cores[0].length < 2)) { cardLookupSeq++; return; }
+
+    // Short/empty fragment (e.g. a lone letter): just the offline name list —
+    // a real card search would match half the database and isn't useful yet.
+    if (!cores.length || (cores.length === 1 && cores[0].length < 2)) {
+      cardLookupSeq++;
+      clearTimeout(cardLookupTimer);
+      if (cardLookupCtrl) cardLookupCtrl.abort();
+      paintSuggestions(null, null);
+      return;
+    }
 
     // Local + live API run IN PARALLEL, not local-then-fallback. Local is a
-    // synchronous in-memory scan (zero latency) so it paints first whenever
-    // it has anything. The live lookup runs alongside it regardless; when it
-    // resolves it's merged with the local snapshot and re-ranked, so a closer
-    // or newer match from the API can rise above what local already showed.
+    // synchronous in-memory scan (zero latency) so it ranks and paints first
+    // with the closest match already on top. The live lookup runs alongside it
+    // regardless; when it resolves it's merged with the local snapshot and
+    // re-ranked, so a newer/closer match from the API can rise to the top.
     const seq = ++cardLookupSeq;
     clearTimeout(cardLookupTimer);
     if (cardLookupCtrl) cardLookupCtrl.abort();
 
     const local = searchLocalCards(cores, number, total) || [];
-    if (local.length) paintSuggestions(local, seq);
+    paintSuggestions(local.length ? rankAndDedupe(local, name, number, total) : null, seq);
 
     liveCardLookup(name, number, total, cores, local, seq);
   }
 
   // ── Local card dataset (cards.js) ──────────────────────────
-  // Scans the bundled CARDS snapshot in memory: zero network, zero rate
-  // limit. Returns null when the dataset hasn't loaded/been generated yet, so
-  // the caller falls through to the live API untouched.
+  // Scans the bundled CARDS snapshot in memory: zero network, zero rate limit.
+  // Returns the matching candidate cards (newest-first, capped) for the caller
+  // to rank, or null when the dataset hasn't loaded so the caller can fall
+  // through to the live API untouched.
   function searchLocalCards(cores, number, total) {
     if (typeof CARDS === "undefined" || !CARDS.length) return null;
     const numLower = (number || "").toLowerCase();
+    const isNumeric = /^\d+$/.test(numLower);
     const results = [];
     for (let i = 0; i < CARDS.length; i++) {
       const c = CARDS[i];
@@ -1004,22 +1009,18 @@
         const cn = String(c[1]).toLowerCase();
         if (total) {
           if (!cn.startsWith(numLower) || String(c[2]) !== total) continue;
-        } else if (/^\d+$/.test(numLower)) {
+        } else if (isNumeric) {
           if (!(cn.startsWith(numLower) || String(c[2]) === numLower)) continue;
         } else if (!cn.startsWith(numLower)) {
           continue;
         }
       }
-      results.push(c);
-      if (results.length >= 300) break; // cap the scan; sorted slice below trims further
+      // CARDS is already stored newest-first, so we collect the newest matches;
+      // rankAndDedupe (in the caller) then promotes the closest to the top.
+      results.push({ name: c[0], num: c[2] ? `${c[1]}/${c[2]}` : c[1], set: c[3], src: "" });
+      if (results.length >= 50) break;
     }
-    results.sort((a, b) => (b[4] || "").localeCompare(a[4] || "")); // newest set first
-    return results.slice(0, 12).map(c => ({
-      name: c[0],
-      num:  c[2] ? `${c[1]}/${c[2]}` : c[1],
-      set:  c[3],
-      src:  "",
-    }));
+    return results;
   }
 
   // Turn raw input like "PSA 10 Charizard ex 125/197 reverse holo" into
@@ -1073,21 +1074,35 @@
   }
 
   // ── Dropdown painter ──────────────────────────────────────
-  // One place builds the dropdown: the live API results, or the offline name
-  // list when there are none (also the seamless fallback if the APIs are slow,
-  // empty, or down). apiResults: array to show, or null for the offline list.
-  // seq: null for the instant paint, or the lookup's seq for async paints (a
-  // stale async paint is dropped so it can't overwrite newer input).
+  // One place builds the dropdown: the live/local card results, or the offline
+  // name list when there are none. apiResults: array to show, or null for the
+  // offline list. seq: null for the instant paint, or the lookup's seq for
+  // async paints (a stale async paint is dropped so it can't overwrite newer
+  // input). Skips the DOM rebuild entirely when the result is identical to
+  // what's already shown — so the local→merge handoff never flickers.
+  let lastSuggestSig = "";
   function paintSuggestions(apiResults, seq) {
     if (seq !== null && seq !== cardLookupSeq) return;
-    const ci  = document.getElementById("cardInput");
     const box = document.getElementById("suggestions");
+    const rows = (apiResults && apiResults.length) ? apiResults : null;
+    const sig = rows
+      ? "c:" + rows.map(r => r.name + "|" + r.num + "|" + r.set).join("~")
+      : "n:" + document.getElementById("cardInput").value.toLowerCase();
+    if (sig === lastSuggestSig) return; // identical to what's shown — no rebuild
+    lastSuggestSig = sig;
     box.innerHTML = "";
-    if (apiResults && apiResults.length) {
-      apiResults.forEach(r => box.appendChild(makeCardRow(r)));
-    } else {
-      appendOfflineNames(box, ci.value);
-    }
+    if (rows) rows.forEach(r => box.appendChild(makeCardRow(r)));
+    else appendOfflineNames(box, document.getElementById("cardInput").value);
+  }
+
+  // Close the dropdown AND cancel any pending/in-flight lookup, so a late API
+  // response can't re-open a menu the user already dismissed.
+  function closeSuggestions() {
+    cardLookupSeq++;
+    clearTimeout(cardLookupTimer);
+    if (cardLookupCtrl) cardLookupCtrl.abort();
+    document.getElementById("suggestions").innerHTML = "";
+    lastSuggestSig = "";
   }
 
   // Cheap, offline last-word autocomplete over the bundled species/trainer
@@ -1130,10 +1145,8 @@
   function fillFromSuggestion(value) {
     const ci = document.getElementById("cardInput");
     ci.value = value;
-    update();
-    cardLookupSeq++;                 // invalidate the lookup update() just queued
-    clearTimeout(cardLookupTimer);
-    document.getElementById("suggestions").innerHTML = "";
+    update();              // refresh eBay links + status badge for the picked card
+    closeSuggestions();    // cancel the lookup update() just queued, close the menu
     ci.focus();
     ci.setSelectionRange(ci.value.length, ci.value.length);
   }
@@ -1174,7 +1187,10 @@
         .then(results => results.length ? results : fetchTcgdex(cores, number, signal))
         .then(results => {
           // Don't cache a transient failure as an authoritative empty result.
-          if (results.length || !ptcgFailed) cardCache.set(q, results);
+          if (results.length || !ptcgFailed) {
+            if (cardCache.size >= 300) cardCache.clear(); // keep the cache bounded
+            cardCache.set(q, results);
+          }
           mergeAndPaint(results, localResults, name, number, total, seq);
         })
         .catch(err => {
@@ -1313,7 +1329,7 @@
     const input = document.getElementById("cardInput");
     input.value = "";
     input.focus();
-    document.getElementById("suggestions").innerHTML = "";
+    closeSuggestions();       // also cancels any pending/in-flight lookup
     document.getElementById("status").innerHTML = "";
     localStorage.setItem("lastCard", "");
     closeAll(); // clearing the box closes any open panels
@@ -1321,7 +1337,7 @@
 
   document.addEventListener("click", e => {
     if (!document.querySelector(".input-wrap").contains(e.target))
-      document.getElementById("suggestions").innerHTML = "";
+      closeSuggestions();     // dismiss + cancel lookup so it can't reopen later
   });
 
   // ── Trading Out ───────────────────────────────────────────
