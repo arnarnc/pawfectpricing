@@ -762,6 +762,7 @@
 </div>
 
 <script src="cards.js"></script>
+<script src="cards_jp.js"></script>
 <script>
   const TRAINER_NAMES = ["Ash Ketchum","Leon","Cynthia","Steven Stone","Red","Lance","Diantha","Iris","Alder","Blue / Gary Oak","N","Giovanni","Guzma","Gladion","Cyrus","Silver","Wally","Hop","Marnie","Bede","Nemona","Arven","Penny","Geeta","Rika","Poppy","Larry","Hassel","Lorelei","Bruno","Agatha","Will","Koga","Karen","Sidney","Phoebe","Glacia","Drake","Aaron","Bertha","Flint","Lucian","Shauntal","Marshal","Grimsley","Caitlin","Malva","Wikstrom","Drasna","Siebold","Kahili","Molayne","Olivia","Acerola","Hapu","Brock","Misty","Lt. Surge","Erika","Sabrina","Blaine","Whitney","Bugsy","Morty","Chuck","Jasmine","Pryce","Clair","Roxanne","Brawly","Wattson","Flannery","Norman","Winona","Tate & Liza","Wallace","Juan","Roark","Gardenia","Fantina","Maylene","Crasher Wake","Byron","Candice","Volkner","Cilan","Chili","Cress","Lenora","Burgh","Elesa","Clay","Skyla","Brycen","Drayden","Roxie","Marlon","Cheren","Viola","Grant","Korrina"];
 
@@ -992,13 +993,28 @@
   // Returns the matching candidate cards (newest-first, capped) for the caller
   // to rank, or null when the dataset hasn't loaded so the caller can fall
   // through to the live API untouched.
+  // English (cards.js) + Japanese (cards_jp.js) merged once and re-sorted
+  // newest-first, so a recent Japanese set can rank alongside English cards
+  // instead of always trailing them. Built lazily on first search.
+  let allCards = null;
+  function getAllCards() {
+    if (allCards) return allCards;
+    const en = (typeof CARDS !== "undefined" && CARDS) ? CARDS : [];
+    const jp = (typeof CARDS_JP !== "undefined" && CARDS_JP) ? CARDS_JP : [];
+    allCards = jp.length
+      ? en.concat(jp).sort((a, b) => (a[4] < b[4] ? 1 : a[4] > b[4] ? -1 : 0))
+      : en;
+    return allCards;
+  }
+
   function searchLocalCards(cores, number, total) {
-    if (typeof CARDS === "undefined" || !CARDS.length) return null;
+    const cards = getAllCards();
+    if (!cards.length) return null;
     const numLower = (number || "").toLowerCase();
     const isNumeric = /^\d+$/.test(numLower);
     const results = [];
-    for (let i = 0; i < CARDS.length; i++) {
-      const c = CARDS[i];
+    for (let i = 0; i < cards.length; i++) {
+      const c = cards[i];
       const nameLower = c[5];
       let ok = true;
       for (let j = 0; j < cores.length; j++) {
