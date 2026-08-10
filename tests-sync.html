@@ -199,6 +199,24 @@
     eq(w.R.all().length, 2, "but it did take in both remote searches");
   }
 
+  group("The panel never reports a stale count");
+  {
+    // Caught on the live site: after a pull left the status "ok", later syncs
+    // skipped updating the message, so the panel said "Synced 0 searches"
+    // while two were already stored and uploaded.
+    const w = await world({ storage: Object.assign({}, CONNECTED, { syncEtag:'"same"' }),
+      remote:{v:1,items:[]}, remoteEtag:'"same"' });
+    w.R.startAutoSync();
+    await wait(120);
+    eq(w.R.getState().message, "Synced 0 searches", "starts out reporting nothing stored");
+    ["pikachu 20/200","charizard 125/197"].forEach(q =>
+      w.R.record(q, () => ({ name:q.split(" ")[0], number:q.split(" ")[1].split("/")[0], total:q.split("/")[1] })));
+    await w.leave();
+    await wait(120);
+    eq(w.R.getState().message, "Synced 2 searches", "reports the real count after a background sync");
+    eq(w.remote.items.length, 2, "and the gist really does hold them");
+  }
+
   // ── Merge semantics ────────────────────────────────────────
   group("Merge is order-independent and keeps the newest");
   {

@@ -209,9 +209,15 @@
   function gistId() { return localStorage.getItem(LS_GIST) || ""; }
   function isConfigured() { return !!token(); }
 
+  // Deduped rather than conditional: the message is always kept truthful, and
+  // silence comes from there being nothing new to say. An earlier version
+  // skipped the update entirely while already "ok", which left the panel
+  // reporting a stale count ("Synced 0 searches" with two in hand).
   function setState(status, message) {
+    message = message || "";
+    if (syncState.status === status && syncState.message === message) return;
     syncState.status = status;
-    syncState.message = message || "";
+    syncState.message = message;
     emit();
   }
   function getState() {
@@ -337,11 +343,11 @@
         // transferred and GitHub doesn't count it against the rate limit, so
         // the overwhelmingly common "other device did nothing" case is close
         // to free.
-        if (r.status === 304) { markSynced(quiet); return false; }
+        if (r.status === 304) { markSynced(); return false; }
         if (r.etag) localStorage.setItem(LS_ETAG, r.etag);
         var g = r.body || {};
         var file = g.files && g.files[GIST_FILE];
-        if (!file) { markSynced(quiet); return false; }
+        if (!file) { markSynced(); return false; }
         // Gists over 1MB come back truncated with a raw_url to fetch instead.
         var body = file.truncated
           ? fetch(file.raw_url).then(function (x) { return x.text(); })
@@ -351,7 +357,7 @@
           // We hold searches the remote doesn't -- schedule a write so the
           // other device eventually sees them.
           if (res.localOnly) setDirty(true);
-          markSynced(quiet);
+          markSynced();
           return res.changed;
         });
       })
@@ -388,7 +394,7 @@
         // flight; otherwise that newer search would never be sent.
         if (rev === sentRev) setDirty(false);
         else schedulePush();
-        markSynced(true);
+        markSynced();
         return true;
       })
       .catch(function (e) { reportErr(e, true); return false; })
@@ -419,9 +425,9 @@
     else localStorage.removeItem(LS_DIRTY);
   }
 
-  function markSynced(quiet) {
+  function markSynced() {
     localStorage.setItem(LS_PULLED, String(Date.now()));
-    if (!quiet || syncState.status !== "ok") setState("ok", "Synced " + items.length + " searches");
+    setState("ok", "Synced " + items.length + " searches");
   }
   function reportErr(e, quiet) {
     // A background failure is not worth shouting about -- the next sync retries
