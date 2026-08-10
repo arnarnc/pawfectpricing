@@ -77,6 +77,12 @@
 
   function key(q) { return q.toLowerCase().replace(/\s+/g, " ").trim(); }
 
+  // Collector-number canonicaliser, injected by index.html so there is exactly
+  // one definition of "071/072 is 71/72" in the app. Falls back to a plain
+  // lowercase if it's never set, which keeps this module standalone.
+  var canon = function (s) { return String(s == null ? "" : s).toLowerCase(); };
+  function setCanon(fn) { if (typeof fn === "function") canon = fn; }
+
   // ── Recording ──────────────────────────────────────────────
   // Called when a search is actually run (an eBay button, or desktop Compare) --
   // not on every keystroke. Typing is intent; searching is a decision, and only
@@ -117,8 +123,8 @@
   // "pika" puts 20/200 above the 18/091 you looked up yesterday.
   function match(cores, number, total, limit) {
     var out = [];
-    var numLower = (number || "").toLowerCase();
-    var want = numLower && total ? numLower + "/" + total.toLowerCase() : numLower;
+    var numLower = canon(number);
+    var want = numLower && total ? numLower + "/" + canon(total) : numLower;
     for (var i = 0; i < items.length && out.length < (limit || 6); i++) {
       var it = items[i];
       var nm = it.nm || "";
@@ -128,7 +134,9 @@
       }
       if (!ok) continue;
       if (want) {
-        var itNum = String(it.num || "").toLowerCase();
+        // Canonicalised on read, so entries saved before this rule existed
+        // (or by an older version on another device) still match.
+        var itNum = canon(it.num);
         var parts = itNum.split("/");
         // Match a full "18/091", a partial collector number ("18"), or the set
         // total on its own ("091") — the same three ways the catalog search
@@ -483,6 +491,7 @@
     getState: getState,
     isConfigured: isConfigured,
     startAutoSync: startAutoSync,
+    setCanon: setCanon,
     _key: key
   };
 })(typeof window !== "undefined" ? window : globalThis);

@@ -877,7 +877,7 @@
      without it a phone can keep running an old copy of the money rules after a
      deploy. Bump the number whenever money.js or recents.js changes. -->
 <script src="money.js?v=1"></script>
-<script src="recents.js?v=4"></script>
+<script src="recents.js?v=5"></script>
 <script src="cards.js"></script>
 <script src="cards_jp.js"></script>
 <script>
@@ -891,6 +891,9 @@
   // ── Auction toggle ────────────────────────────────────────
   let excludeAuctions = localStorage.getItem("excludeAuctions") === "true";
   document.addEventListener("DOMContentLoaded", () => {
+    // Before anything can match: one definition of collector-number equality,
+    // shared with the recents matcher.
+    Recents.setCanon(canonNum);
     document.getElementById("excludeAuctions").checked = excludeAuctions;
     applyDesktopMode();
     // Restore the last typed card so a refresh doesn't lose it.
@@ -1033,6 +1036,59 @@
   function normalizeCardNumber(input) {
     return input.replace(/(\d+)\s+(\d+)(?=\s|$)/, "$1/$2");
   }
+
+  // ── Collector-number equivalence ──────────────────────────
+  // A card printed "071/072" is the same card as "71/72", and "5/018" is the
+  // same as "5/18" — the padding is a print convention, not part of the
+  // number. Every comparison in the app runs through this one canonical form
+  // so a typed number matches whichever way the catalogue happens to store it.
+  //
+  //   "071"     -> "71"        "005/018" -> "5/18"
+  //   "SWSH050" -> "swsh50"    "TG05"    -> "tg5"     "0" -> "0"
+  function canonNum(s) {
+    return String(s == null ? "" : s).toLowerCase().replace(/(^|[^0-9])0+(\d)/g, "$1$2");
+  }
+
+  function padTo(n, w) { return n.length >= w ? n : "0".repeat(w - n.length) + n; }
+
+  // The forms an eBay seller might plausibly have typed into a listing title.
+  // Must work in BOTH directions: typing "71/72" has to find a listing written
+  // "071/072" just as much as the reverse, so the bare form alone isn't enough.
+  // Three-wide padding is included because that's how these are commonly
+  // printed on the card ("071/072", "005/018").
+  function cardNumberVariants(n, t) {
+    const bn = String(parseInt(n, 10)), bt = String(parseInt(t, 10));
+    const forms = [
+      bn + "/" + bt,                        // 5/18   — bare
+      padTo(bn, t.length) + "/" + t,        // 05/18  — matching the typed width
+      padTo(bn, 3) + "/" + padTo(bt, 3),    // 005/018 — three-wide, as printed
+      n + "/" + t,                          // exactly as typed
+    ];
+    const seen = [];
+    forms.forEach(v => { if (seen.indexOf(v) === -1) seen.push(v); });
+    return seen.slice(0, 3);
+  }
+
+  // Just the collector-number side, for the API's `number:` field.
+  function numberForms(n, t) {
+    const bn = String(parseInt(n, 10));
+    const seen = [];
+    [bn, padTo(bn, String(t).length), padTo(bn, 3)].forEach(v => {
+      if (v && seen.indexOf(v) === -1) seen.push(v);
+    });
+    return seen;
+  }
+
+  // Turn "mewtwo 071/072" into "mewtwo (71/72,071/072)" — eBay's OR syntax, so
+  // a listing titled either way is found. Listings are inconsistent about
+  // padding, and searching only the typed form silently hides half the comps,
+  // which is the difference between a good quote and a bad one.
+  function expandCardNumbers(input) {
+    return input.replace(/(^|[\s(,])(\d{1,4})\/(\d{1,4})(?=$|[\s),])/g, (m, pre, n, t) => {
+      const variants = cardNumberVariants(n, t);
+      return variants.length > 1 ? pre + "(" + variants.join(",") + ")" : m;
+    });
+  }
   const CONDITIONS = { lp:"lightly played", nm:"near mint", mp:"moderately played", hp:"heavily played", dmg:"damaged" };
   const PRODUCTS   = { etb:"(etb,elite trainer box)", bbx:"booster box" };
 
@@ -1046,7 +1102,7 @@
     return /\b(etb|elite trainer box|booster box|bbx|sealed|collection box|tin)\b/i.test(input);
   }
   function buildUrls(input) {
-    const normalized = expandProducts(expandConditions(normalizeCardNumber(input)));
+    const normalized = expandCardNumbers(expandProducts(expandConditions(normalizeCardNumber(input))));
     const encoded    = encodeURIComponent(normalized);
     const gradedFlag = isGraded(input) ? "Yes" : "No";
     const base = isSealedProduct(input)
@@ -1250,6 +1306,9 @@
                  <button class="btn-ghost" onclick="closeSync()">Cancel</button>`}
           </div>
           ${s.configured ? `<div class="modal-actions">
+            <button class="btn-ghost" onclick="copySyncToken(this)">📋 Copy token for another device</button>
+          </div>
+          <div class="modal-actions">
             <button class="btn-danger" onclick="syncDisconnect()">Disconnect this device</button>
           </div>` : ""}
           <div class="modal-actions">
@@ -1283,6 +1342,24 @@
     Recents.pull(true)
       .then(() => Recents.push(true))
       .then(() => { openSync(); renderSuggestionsIfOpen(); });
+  }
+
+  // Pairing a second device is a one-time paste, so make the copy side easy:
+  // grab it here, send it to yourself however you like, paste it there.
+  // Deliberately no QR/link sharing — a token in a URL ends up in history,
+  // and this one can read and write every gist on the account.
+  function copySyncToken(btn) {
+    const tok = localStorage.getItem("syncToken") || "";
+    if (!tok) return;
+    const done = ok => {
+      btn.textContent = ok ? "✓ Copied — paste it on the other device" : "Couldn't copy — token: " + tok;
+      setTimeout(() => { btn.textContent = "📋 Copy token for another device"; }, ok ? 2500 : 12000);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(tok).then(() => done(true), () => done(false));
+    } else {
+      done(false);   // insecure context / old browser: show it so it can be copied by hand
+    }
   }
 
   function syncDisconnect() {
@@ -1337,7 +1414,7 @@
   function searchLocalCards(cores, number, total) {
     const cards = getAllCards();
     if (!cards.length) return null;
-    const numLower = (number || "").toLowerCase();
+    const numLower = canonNum(number);
     const isNumeric = /^\d+$/.test(numLower);
     const results = [];
     for (let i = 0; i < cards.length; i++) {
@@ -1349,11 +1426,13 @@
       }
       if (!ok) continue;
       if (numLower) {
-        const cn = String(c[1]).toLowerCase();
+        // Both sides canonicalised: the catalogue stores "5" where the card is
+        // printed "005", and either is what the user might type.
+        const cn = canonNum(c[1]);
         if (total) {
-          if (!cn.startsWith(numLower) || String(c[2]) !== total) continue;
+          if (!cn.startsWith(numLower) || canonNum(c[2]) !== total) continue;
         } else if (isNumeric) {
-          if (!(cn.startsWith(numLower) || String(c[2]) === numLower)) continue;
+          if (!(cn.startsWith(numLower) || canonNum(c[2]) === numLower)) continue;
         } else if (!cn.startsWith(numLower)) {
           continue;
         }
@@ -1378,7 +1457,11 @@
       .replace(/\b(1st\s*ed(?:ition)?|first\s*ed(?:ition)?|shadowless|unlimited|reverse\s*holo|rev\s*holo|holo(?:foil)?|foil|promo|full\s*art|alt(?:ernate)?\s*art|secret\s*rare)\b/g, " ")
       .replace(/#/g, " ")
       .replace(/\s+/g, " ")
-      .trim();
+      .trim()
+      // "charizard 4 102" -> "charizard 4/102". The eBay side has always
+      // accepted the space-separated form (the help page recommends it), but
+      // the parser used to glue the digits into "4102" and match nothing.
+      .replace(/(\d+)\s+(\d+)(?=\s|$)/, "$1/$2");
     if (!s) return { name: "", number: "", total: "" };
     const tokens = s.split(" ");
     const numIdx = tokens.findIndex(isNumberToken);
@@ -1389,7 +1472,9 @@
     // (could be either), which the query builder handles by searching both.
     const tok = tokens.slice(numIdx).join("");
     const m   = tok.match(/^([a-z]*\d+[a-z]?)(?:\/(\d+))?/);
-    return { name, number: m ? m[1] : "", total: (m && m[2]) || "" };
+    // Canonical from here on, so "071/072" and "71/72" are one and the same
+    // query to the catalogue scan, the recents matcher and the API.
+    return { name, number: canonNum(m ? m[1] : ""), total: canonNum((m && m[2]) || "") };
   }
 
   // A collector-number token: pure numbers (4, 125, 125/197) or short
@@ -1571,15 +1656,16 @@
       deduped.push(r);
     }
     const nameLower = (name || "").toLowerCase();
-    const numLower = (number || "").toLowerCase();
+    const numLower = canonNum(number);
+    const totalC = canonNum(total);
     const score = r => {
       const rNameLower = r.name.toLowerCase();
-      const [rNum, rTotal] = String(r.num).split("/");
+      const [rNum, rTotal] = canonNum(r.num).split("/");
       let s = 0;
       if (rNameLower === nameLower) s += 100;
       else if (rNameLower.startsWith(nameLower)) s += 50;
-      if (numLower && (rNum || "").toLowerCase() === numLower) s += 30;
-      if (total && (rTotal || "").toLowerCase() === total.toLowerCase()) s += 20;
+      if (numLower && (rNum || "") === numLower) s += 30;
+      if (totalC && (rTotal || "") === totalC) s += 20;
       return s;
     };
     return deduped
@@ -1599,7 +1685,13 @@
     const clauses = cores.map(c => `name:${c}*`);
     if (number && total) {
       // Full "125/197": collector number 125 in a 197-card set — precise.
-      clauses.push(`number:${number}* set.printedTotal:${total}`);
+      // The API mostly stores unpadded numbers, but not universally, so match
+      // any plausible padding rather than betting on one.
+      const forms = numberForms(number, total);
+      const numClause = forms.length === 1
+        ? `number:${forms[0]}*`
+        : `(${forms.map(f => `number:${f}*`).join(" OR ")})`;
+      clauses.push(`${numClause} set.printedTotal:${total}`);
     } else if (number && /^\d+$/.test(number)) {
       // Bare numeric "197": could be the collector number OR the set total
       // ("125/197"), so match either — covers typing the denominator you see.
