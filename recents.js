@@ -42,9 +42,12 @@
   // force-flushes anyway, so the timer is only a backstop for a session left
   // open. A 20-search session costs ONE write, not twenty.
   var PUSH_DEBOUNCE = 20000;
-  // Don't even ask the server more than once every few hours in the background.
-  // "Sync now" in the panel always overrides this.
-  var PULL_INTERVAL = 4 * 60 * 60 * 1000;
+  // Opening the app always checks (see startAutoSync) -- that's the moment you
+  // expect to see the other device's searches, and thanks to the ETag it's
+  // normally a bodyless 304 that doesn't even count against the rate limit.
+  // This interval only throttles the *re-focus* check, so flicking between
+  // windows doesn't produce a request per switch.
+  var PULL_INTERVAL = 2 * 60 * 1000;
 
   var items = load();
   var pushTimer = null;
@@ -318,6 +321,10 @@
     var etag = localStorage.getItem(LS_ETAG) || "";
     return ghRaw("/gists/" + gistId(), { etag: etag })
       .then(function (r) {
+        // Any non-throwing response (including a 304) means we're up to date
+        // with the remote, which is the precondition for being allowed to
+        // write. Errors fall through to .catch and leave this false.
+        sessionPulled = true;
         // 304: the gist is byte-for-byte what we already have. No body is
         // transferred and GitHub doesn't count it against the rate limit, so
         // the overwhelmingly common "other device did nothing" case is close
@@ -345,14 +352,19 @@
 
   // Writes only happen when this device actually has something new. A device
   // that's opened, reads, and searches nothing never writes at all.
-  var pushing = null;   // in-flight write, so two triggers can't both send
-  var rev = 0;          // bumped on every local change
+  var pushing = null;      // in-flight write, so two triggers can't both send
+  var rev = 0;             // bumped on every local change
+  var sessionPulled = false; // has a pull succeeded since this page loaded?
 
   function push(force) {
     if (!isConfigured() || !gistId()) return Promise.resolve(false);
     clearTimeout(pushTimer);
     pushTimer = null;
     if (!force && !isDirty()) return Promise.resolve(false);
+    // Never write on top of a remote we haven't read. If the startup pull
+    // failed (offline, token expired), the local changes stay marked dirty and
+    // go out on a later run instead of overwriting the other device's work.
+    if (!force && !sessionPulled) return Promise.resolve(false);
     // Leaving the app can fire visibilitychange AND pagehide back to back, and
     // `dirty` isn't cleared until the request resolves -- so without this the
     // same payload goes up twice.
@@ -426,11 +438,16 @@
     if (!isConfigured()) { setState("off", ""); return; }
     if (autoSyncStarted) return;   // listeners are registered exactly once
     autoSyncStarted = true;
-    // Anything left unsent by a previous session (app killed mid-debounce)
-    // goes out now.
-    if (isDirty()) push();
-    // Background pull, rate-limited to PULL_INTERVAL and silent about it.
-    pull(false, true);
+
+    // ALWAYS pull before pushing, and always on load. A push replaces the whole
+    // gist file -- there is no server-side merge -- so sending this device's
+    // list before taking in the other device's would silently wipe out every
+    // search made elsewhere since we last looked. Anything left unsent by a
+    // previous session (app killed mid-debounce) goes out only after that
+    // merge, and only if the pull actually succeeded.
+    pull(true, true).then(function () {
+      if (sessionPulled && isDirty()) push();
+    });
 
     document.addEventListener("visibilitychange", function () {
       if (document.hidden) {

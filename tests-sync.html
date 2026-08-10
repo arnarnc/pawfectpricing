@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pawfect Pricing · sync tests</title>
+  <style>
+    body { font-family: ui-monospace, Menlo, Consolas, monospace; background:#09090b; color:#fafafa; padding:24px; line-height:1.5; }
+    h1 { font-size:18px; margin-bottom:4px; }
+    h2 { font-size:13px; margin:20px 0 6px; color:#a1a1aa; text-transform:uppercase; letter-spacing:.08em; }
+    .sum { font-size:15px; font-weight:700; padding:10px 14px; border-radius:8px; margin:12px 0 4px; }
+    .sum.pass { background:rgba(74,222,128,.12); color:#4ade80; }
+    .sum.fail { background:rgba(248,113,113,.12); color:#f87171; }
+    .t { font-size:12px; padding:2px 0; }
+    .t.pass::before { content:"PASS  "; color:#4ade80; }
+    .t.fail::before { content:"FAIL  "; color:#f87171; }
+    .t.fail { color:#fca5a5; }
+    .why { color:#71717a; padding-left:52px; font-size:11px; }
+    .calls { color:#a78bfa; padding-left:52px; font-size:11px; }
+  </style>
+</head>
+<body>
+  <h1>Sync tests</h1>
+  <p class="why" style="padding-left:0">Each scenario runs a FRESH copy of recents.js against a fake GitHub and a fake
+     localStorage, so scenarios can't leak into each other. Nothing here touches a real account.
+     These guard against silent data loss between devices — run after any change to recents.js.</p>
+  <div id="out"></div>
+
+<script>
+  const out = document.getElementById("out");
+  let passed = 0, failed = 0;
+  const summary = document.createElement("div");
+  out.appendChild(summary);
+
+  function group(n){ const h=document.createElement("h2"); h.textContent=n; out.appendChild(h); }
+  function ok(c,l,w){ const d=document.createElement("div"); d.className="t "+(c?"pass":"fail"); d.textContent=l; out.appendChild(d);
+    if(!c&&w){ const x=document.createElement("div"); x.className="why"; x.textContent=w; out.appendChild(x);} c?passed++:failed++; }
+  function eq(a,e,l){ ok(JSON.stringify(a)===JSON.stringify(e), l, `expected ${JSON.stringify(e)}, got ${JSON.stringify(a)}`); }
+  function note(text){ const d=document.createElement("div"); d.className="calls"; d.textContent=text; out.appendChild(d); }
+
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const card = (q, ageH) => ({ q, nm: q.split(" ")[0], num: q.split(" ")[1] || "", t: Date.now() - (ageH||0)*3600000, n: 1 });
+
+  // Build an isolated world: fresh module, fake storage, fake GitHub, fake
+  // document. Parameters shadow the real globals inside recents.js, so the
+  // module can't reach the page's storage, network or event system.
+  async function world(opts) {
+    const src = await fetch("recents.js?t=" + Date.now()).then(r => r.text());
+    const store = Object.assign({}, opts.storage || {});
+    const localStorageStub = {
+      getItem: k => (k in store ? store[k] : null),
+      setItem: (k, v) => { store[k] = String(v); },
+      removeItem: k => { delete store[k]; },
+    };
+    const w = {
+      remote: opts.remote ? JSON.parse(JSON.stringify(opts.remote)) : null,
+      etag: opts.remoteEtag || '"r1"',
+      calls: [],
+      hidden: false,
+      offline: !!opts.offline,
+      listeners: { doc: {}, win: {} },
+    };
+    const fetchStub = (url, o) => {
+      o = o || {};
+      const method = o.method || "GET";
+      const inm = (o.headers || {})["If-None-Match"] || "";
+      if (w.offline) { w.calls.push(method + " (network error)"); return Promise.reject(new TypeError("Failed to fetch")); }
+      if (method === "PATCH") {
+        w.remote = JSON.parse(JSON.parse(o.body).files["pawfect-recents.json"].content);
+        w.etag = '"w' + (Math.random()*1e6|0) + '"';
+        w.calls.push("PATCH wrote " + w.remote.items.length);
+        return Promise.resolve({ ok:true, status:200, headers:{get:()=>w.etag}, json:()=>Promise.resolve({id:"g1"}) });
+      }
+      if (inm && inm === w.etag) { w.calls.push("GET 304");
+        return Promise.resolve({ ok:false, status:304, headers:{get:()=>w.etag} }); }
+      w.calls.push("GET 200");
+      return Promise.resolve({ ok:true, status:200, headers:{get:()=>w.etag},
+        json:()=>Promise.resolve({ id:"g1", files:{ "pawfect-recents.json": { content: JSON.stringify(w.remote) } } }) });
+    };
+    const documentStub = {
+      get hidden(){ return w.hidden; },
+      addEventListener: (e, fn) => { (w.listeners.doc[e] = w.listeners.doc[e] || []).push(fn); },
+    };
+    const windowStub = { addEventListener: (e, fn) => { (w.listeners.win[e] = w.listeners.win[e] || []).push(fn); } };
+    new Function("window","globalThis","document","localStorage","fetch", src)(
+      windowStub, windowStub, documentStub, localStorageStub, fetchStub);
+    w.R = windowStub.Recents;
+    w.store = store;
+    w.fire = (target, ev) => (w.listeners[target][ev] || []).forEach(fn => fn());
+    w.leave = async () => { w.hidden = true; w.fire("doc","visibilitychange"); await wait(60); };
+    w.returnTo = async () => { w.hidden = false; w.fire("doc","visibilitychange"); await wait(60); };
+    w.reset = () => { w.calls = []; };
+    return w;
+  }
+
+  const CONNECTED = { syncToken: "fake", syncGistId: "g1" };
+
+  (async function run(){
+
+  // ── The bug that motivated this file ───────────────────────
+  group("A push must never overwrite the other device's searches");
+  {
+    // Desktop has one unsent search from last week and a stale ETag. Mobile has
+    // pushed four searches since. Desktop opens.
+    const mobile = ["gengar 94/151","mewtwo 150/165","snorlax 143/165","lapras 47/165"].map((q,i)=>card(q,i));
+    const w = await world({
+      storage: Object.assign({}, CONNECTED, {
+        syncEtag: '"stale"', syncDirty: "1",
+        syncLastPull: String(Date.now() - 10*60*1000),
+        recentSearches: JSON.stringify([card("desktop only 1/1", 168)]),
+      }),
+      remote: { v:1, items: mobile }, remoteEtag: '"mobile-wrote"',
+    });
+    w.R.startAutoSync();
+    await wait(150);
+    note("calls: " + w.calls.join(" | "));
+    ok(w.calls[0].indexOf("GET") === 0, "reads the remote BEFORE writing anything");
+    const remoteQs = w.remote.items.map(x => x.q);
+    mobile.forEach(m => ok(remoteQs.indexOf(m.q) > -1, `mobile's "${m.q}" survives the desktop push`));
+    ok(remoteQs.indexOf("desktop only 1/1") > -1, "desktop's own unsent search is added, not dropped");
+    eq(remoteQs.length, 5, "remote ends up with the union of both devices");
+    const localQs = w.R.all().map(x => x.q);
+    eq(localQs.length, 5, "desktop now shows all five locally too");
+    eq(localQs[0], "gengar 94/151", "newest search is first");
+  }
+
+  group("An offline start must not clobber either");
+  {
+    const w = await world({
+      storage: Object.assign({}, CONNECTED, { syncDirty: "1",
+        recentSearches: JSON.stringify([card("local only 2/2")]) }),
+      remote: { v:1, items: [card("remote card 3/3")] },
+      offline: true,
+    });
+    w.R.startAutoSync();
+    await wait(150);
+    note("calls: " + w.calls.join(" | "));
+    ok(!w.calls.some(c => c.indexOf("PATCH") === 0), "no write attempted when the pull failed");
+    eq(w.remote.items.map(x=>x.q), ["remote card 3/3"], "remote is untouched");
+    eq(w.store.syncDirty, "1", "still marked dirty, so it retries next time");
+  }
+
+  // ── Efficiency ─────────────────────────────────────────────
+  group("Opening the app always checks, and it's usually free");
+  {
+    const w = await world({
+      storage: Object.assign({}, CONNECTED, { syncEtag: '"same"',
+        syncLastPull: String(Date.now() - 60*1000) }),   // pulled a minute ago
+      remote: { v:1, items:[card("x 1/1")] }, remoteEtag: '"same"',
+    });
+    w.R.startAutoSync();
+    await wait(120);
+    note("calls: " + w.calls.join(" | "));
+    eq(w.calls, ["GET 304"], "opening checks even just after a pull — and gets a bodyless 304");
+    ok(!w.calls.some(c=>c.indexOf("PATCH")===0), "nothing is written");
+  }
+
+  group("Flicking between windows doesn't spam requests");
+  {
+    const w = await world({
+      storage: Object.assign({}, CONNECTED, { syncEtag: '"same"' }),
+      remote: { v:1, items:[] }, remoteEtag: '"same"',
+    });
+    w.R.startAutoSync();
+    await wait(120); w.reset();
+    await w.leave(); await w.returnTo();
+    await w.leave(); await w.returnTo();
+    note("calls: " + (w.calls.join(" | ") || "(none)"));
+    eq(w.calls, [], "two away-and-back cycles inside the throttle make no requests");
+  }
+
+  group("A mobile session batches into a single write");
+  {
+    const w = await world({ storage: Object.assign({}, CONNECTED, { syncEtag:'"same"' }),
+      remote:{v:1,items:[]}, remoteEtag:'"same"' });
+    w.R.startAutoSync();
+    await wait(120); w.reset();
+    ["pikachu 20/200","charizard 125/197","umbreon 215/203","mew 151/165","lugia 139/195"]
+      .forEach(q => w.R.record(q, () => ({ name:q.split(" ")[0], number:q.split(" ")[1].split("/")[0], total:q.split("/")[1] })));
+    await wait(80);
+    eq(w.calls, [], "five searches produce no request while you're still using the app");
+    await w.leave();
+    w.fire("win","pagehide");            // both events fire on some platforms
+    await wait(120);
+    note("calls on leaving: " + w.calls.join(" | "));
+    eq(w.calls, ["PATCH wrote 5"], "leaving writes ONCE, with all five");
+    eq(w.store.syncDirty, undefined, "and the pending flag is cleared");
+  }
+
+  group("A device that only reads never writes");
+  {
+    const w = await world({ storage: Object.assign({}, CONNECTED, { syncEtag:'"old"' }),
+      remote:{v:1,items:[card("a 1/1"),card("b 2/2")]}, remoteEtag:'"new"' });
+    w.R.startAutoSync();
+    await wait(150); w.reset();
+    await w.leave();
+    await wait(120);
+    note("calls after reading then leaving: " + (w.calls.join(" | ") || "(none)"));
+    eq(w.calls, [], "opened, searched nothing, left — no write at all");
+    eq(w.R.all().length, 2, "but it did take in both remote searches");
+  }
+
+  // ── Merge semantics ────────────────────────────────────────
+  group("Merge is order-independent and keeps the newest");
+  {
+    const w = await world({ storage: CONNECTED, remote:{v:1,items:[]} });
+    const older = { q:"pikachu 20/200", nm:"pikachu", num:"20/200", t: 1000, n: 1 };
+    const newer = { q:"Pikachu 20/200", nm:"pikachu", num:"20/200", t: 9000, n: 3 };
+    w.R.merge([older]); w.R.merge([newer]);
+    const a = w.R.all();
+    eq(a.length, 1, "the same search from two devices collapses to one row");
+    eq(a[0].t, 9000, "the newer timestamp wins");
+    eq(a[0].n, 3, "the higher search count is kept");
+  }
+  {
+    const w = await world({ storage: CONNECTED, remote:{v:1,items:[]} });
+    w.R.merge([card("a 1/1",3), card("b 2/2",1), card("c 3/3",2)]);
+    eq(w.R.all().map(x=>x.q), ["b 2/2","c 3/3","a 1/1"], "result is sorted newest-first regardless of input order");
+  }
+
+  summary.className = "sum " + (failed ? "fail" : "pass");
+  summary.textContent = failed ? `${failed} FAILED, ${passed} passed` : `All ${passed} assertions passed`;
+  document.title = (failed ? `${failed} FAILED · ` : "PASS · ") + "sync tests";
+  window.__testResult = { passed, failed };
+  })();
+</script>
+</body>
+</html>
