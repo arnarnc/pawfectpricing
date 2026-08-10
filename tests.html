@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pawfect Pricing · money tests</title>
+  <style>
+    body { font-family: ui-monospace, Menlo, Consolas, monospace; background:#09090b; color:#fafafa; padding:24px; line-height:1.5; }
+    h1 { font-size:18px; margin-bottom:4px; }
+    h2 { font-size:13px; margin:20px 0 6px; color:#a1a1aa; text-transform:uppercase; letter-spacing:.08em; }
+    .sum { font-size:15px; font-weight:700; padding:10px 14px; border-radius:8px; margin:12px 0 4px; }
+    .sum.pass { background:rgba(74,222,128,.12); color:#4ade80; }
+    .sum.fail { background:rgba(248,113,113,.12); color:#f87171; }
+    .t { font-size:12px; padding:2px 0; }
+    .t.pass::before { content:"PASS  "; color:#4ade80; }
+    .t.fail::before { content:"FAIL  "; color:#f87171; }
+    .t.fail { color:#fca5a5; }
+    .why { color:#71717a; padding-left:52px; font-size:11px; }
+  </style>
+</head>
+<body>
+  <h1>Money computation tests</h1>
+  <p class="why" style="padding-left:0">Open this file in a browser. Every assertion below guards a way the tool could
+     quote a wrong dollar figure. Run it after touching money.js.</p>
+  <div id="out"></div>
+
+<!-- Cache-busted on purpose: a test page must never assert against a stale
+     copy of the file it is testing. -->
+<script>document.write('<script src="money.js?t=' + Date.now() + '"><\/script>');</script>
+<script>
+  const out = document.getElementById("out");
+  let passed = 0, failed = 0;
+  const summary = document.createElement("div");
+  out.appendChild(summary);
+
+  function group(name) {
+    const h = document.createElement("h2");
+    h.textContent = name;
+    out.appendChild(h);
+  }
+  function ok(cond, label, why) {
+    const d = document.createElement("div");
+    d.className = "t " + (cond ? "pass" : "fail");
+    d.textContent = label;
+    out.appendChild(d);
+    if (!cond && why) {
+      const w = document.createElement("div");
+      w.className = "why";
+      w.textContent = why;
+      out.appendChild(w);
+    }
+    cond ? passed++ : failed++;
+  }
+  function eq(actual, expected, label) {
+    ok(actual === expected, label, `expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+  }
+
+  const M = Money;
+  const comp = (price, pct, excluded) => ({ price, pct, excluded: !!excluded });
+  const trade = (price, excluded) => ({ price, excluded: !!excluded });
+  let t; // reused by every totals assertion below
+
+  // ── Parsing prices ─────────────────────────────────────────
+  group("Price entry — the 100x bug");
+  eq(M.toDollars("12.50"), 13, `"12.50" -> 13 (not 1250)`);
+  eq(M.toDollars("0.99"), 1, `"0.99" -> 1`);
+  eq(M.toDollars("0.4"), 0, `"0.4" -> 0`);
+  eq(M.livePriceText("12.50"), "12.50", `typing "12.50" keeps the dot (old code gave "1,250")`);
+  eq(M.livePriceText("12."), "12.", `half-typed "12." survives the keystroke`);
+  eq(M.commitPrice("12.50").text, "13", `commits to "13" on blur`);
+  eq(M.commitPrice("1234.7").value, 1235, `1234.7 commits to 1235`);
+  eq(M.livePriceText("1.2.3"), "1.23", `a second dot is dropped, not treated as a new number`);
+
+  group("Price entry — junk and hostile input");
+  eq(M.toDollars(""), 0, `empty -> 0`);
+  eq(M.toDollars(null), 0, `null -> 0`);
+  eq(M.toDollars(undefined), 0, `undefined -> 0`);
+  eq(M.toDollars("abc"), 0, `"abc" -> 0`);
+  eq(M.toDollars("."), 0, `"." -> 0`);
+  eq(M.toDollars("$1,299"), 1299, `"$1,299" -> 1299 (currency + separators stripped)`);
+  eq(M.toDollars("  250 "), 250, `whitespace ignored`);
+  eq(M.toDollars("-5"), 0, `"-5" -> 0 — a negative comp must not shrink a payout`);
+  eq(M.toDollars(-5), 0, `numeric -5 -> 0`);
+  eq(M.toDollars("1e5"), 100000, `"1e5" parses as 100000, not silently truncated`);
+  eq(M.toDollars(Infinity), 0, `Infinity -> 0`);
+  eq(M.toDollars(NaN), 0, `NaN -> 0`);
+  eq(M.toDollars("99999999999"), M.MAX_PRICE, `absurd figure caps instead of quoting billions`);
+  eq(M.livePriceText("00012"), "12", `leading zeros collapse`);
+
+  group("Negatives are impossible — at every layer");
+  // Layer 1: the keystroke filter. A minus sign never survives being typed or
+  // pasted, so a negative can't even appear in the box.
+  eq(M.livePriceText("-50"), "50", `typing "-" is dropped by the input filter`);
+  eq(M.livePriceText("12-34"), "1,234", `a minus mid-number is dropped`);
+  eq(M.livePriceText("-"), "", `a lone "-" leaves the field empty`);
+  // Layer 2: parsing, for anything that arrives by another route (paste,
+  // autofill, old localStorage written before this rule existed).
+  eq(M.toDollars("-0.01"), 0, `"-0.01" -> 0`);
+  eq(M.toDollars(-9999), 0, `a large negative -> 0`);
+  eq(M.normalizeItems([{ price: -75, pct: 80 }])[0].price, 0, `a stored negative normalizes to 0`);
+  // Layer 3: the totals, which re-clamp rather than trusting their input.
+  t = M.computeTotals([comp(-100, 80), comp(50, 80)], [], 80);
+  eq(t.market, 50, `a negative comp adds nothing instead of subtracting`);
+  eq(t.payout, 40, `and it can't inflate the payout either`);
+  ok(t.market >= 0 && t.payout >= 0, `market and payout are never negative`);
+  t = M.computeTotals([], [trade(-500)], 80);
+  ok(!t.settlement.hasValue, `a negative vendor item is worth 0, so nothing settles`);
+  t = M.computeTotals([comp(100, -50)], [], 80);
+  eq(t.payout, 0, `a negative rate floors at 0% rather than going negative`);
+  ok(t.settlement.amount >= 0, `a settlement amount is never negative`);
+
+  group("Rounding is half-up and symmetric");
+  eq(M.toDollars("10.5"), 11, `10.5 -> 11`);
+  eq(M.toDollars("11.5"), 12, `11.5 -> 12 (no banker's rounding surprise)`);
+  eq(M.toDollars("10.49"), 10, `10.49 -> 10`);
+
+  // ── Payout percentage ──────────────────────────────────────
+  group("Payout rate — the '|| 100' trap");
+  eq(M.toPct("0", 80), 0, `0% stays 0% (the old 'parseInt(v)||100' turned it into 100%)`);
+  eq(M.toPct("80", 100), 80, `"80" -> 80`);
+  eq(M.toPct("80%", 100), 80, `"80%" -> 80`);
+  eq(M.toPct("", 80), 80, `empty falls back to the current rate, not to 100%`);
+  eq(M.toPct(null, 80), 80, `null falls back to the current rate`);
+  eq(M.toPct("banana", 80), 80, `junk falls back to the current rate`);
+  eq(M.toPct("150", 80), 100, `>100% caps at 100 — never pay more than market`);
+  eq(M.toPct("-20", 80), 0, `negative floors at 0`);
+
+  // ── Totals ─────────────────────────────────────────────────
+  group("Totals");
+  t = M.computeTotals([comp(100, 80), comp(50, 80)], [], 80);
+  eq(t.market, 150, `market = 100 + 50`);
+  eq(t.payout, 120, `payout at 80% = 120`);
+  eq(t.effRate, 80, `effective rate = 80%`);
+
+  t = M.computeTotals([comp(100, 80), comp(100, 50)], [], 80);
+  eq(t.payout, 130, `mixed rates: 80 + 50 = 130`);
+  eq(Number(t.effRate.toFixed(1)), 65, `blended effective rate = 65%`);
+
+  t = M.computeTotals([comp(100, 80), comp(999, 80, true)], [], 80);
+  eq(t.market, 100, `excluded row contributes nothing to market`);
+  eq(t.payout, 80, `excluded row contributes nothing to payout`);
+
+  t = M.computeTotals([], [], 80);
+  eq(t.market, 0, `empty list: market 0`);
+  eq(t.effRate, 80, `empty list: rate falls back to the header rate, not NaN`);
+  ok(!t.settlement.hasValue, `empty list: settlement panel hidden`);
+
+  t = M.computeTotals([comp(0, 80)], [], 80);
+  eq(t.effRate, 80, `all-zero market: no divide-by-zero, shows header rate`);
+  ok(isFinite(t.effRate), `effective rate is finite`);
+
+  group("Totals — rounding drift across many rows");
+  // 25 rows of $33 at 85% = $28.05 each. Rounding each row first gives 25x28 =
+  // 700; rounding the sum gives 701. Per-row rounding leaks a dollar here, and
+  // grows with the row count — so the sum must be what rounds.
+  const many = Array.from({ length: 25 }, () => comp(33, 85));
+  t = M.computeTotals(many, [], 85);
+  eq(t.market, 825, `25 x $33 = $825`);
+  eq(t.payout, 701, `payout rounds the sum (701), not each row (would be 700)`);
+  ok(t.payout <= t.market, `payout never exceeds market value`);
+
+  const big = Array.from({ length: 200 }, () => comp(7, 33));
+  t = M.computeTotals(big, [], 33);
+  eq(t.payout, 462, `200 rows at an awkward 33% stays exact (0.33*7*200 = 462)`);
+
+  group("Totals — payout can never exceed market");
+  let worst = true;
+  for (let price = 0; price <= 500; price += 7) {
+    for (const pct of [0, 33, 50, 65, 80, 95, 100]) {
+      const r = M.computeTotals([comp(price, pct)], [], 80);
+      if (r.payout > r.market) worst = false;
+    }
+  }
+  ok(worst, `swept 0-500 dollars x 7 rates: payout <= market in every case`);
+
+  // ── Settlement ─────────────────────────────────────────────
+  group("Settlement direction (the sign that decides who hands over cash)");
+  t = M.computeTotals([comp(100, 80)], [], 80);
+  eq(t.settlement.kind, "vendor", `customer's cards only -> vendor pays out`);
+  eq(t.settlement.amount, 80, `vendor pays $80`);
+
+  t = M.computeTotals([comp(100, 80)], [trade(200)], 80);
+  eq(t.settlement.kind, "customer", `vendor's items worth more -> customer tops up`);
+  eq(t.settlement.amount, 120, `customer pays 200 - 80 = 120`);
+
+  t = M.computeTotals([comp(100, 80)], [trade(80)], 80);
+  eq(t.settlement.kind, "even", `exactly matched -> direct trade`);
+  eq(t.settlement.amount, 0, `nothing changes hands`);
+
+  t = M.computeTotals([], [trade(50)], 80);
+  eq(t.settlement.kind, "customer", `vendor's items only -> customer pays for them`);
+  eq(t.settlement.amount, 50, `customer pays $50`);
+
+  t = M.computeTotals([comp(100, 80)], [trade(80, true)], 80);
+  eq(t.settlement.kind, "vendor", `excluding the vendor item flips it back to a payout`);
+  eq(t.settlement.amount, 80, `vendor pays the full $80`);
+
+  group("Settlement — no float-epsilon ambiguity");
+  // These used to sit inside the old +/-0.005 dead zone. With integers the
+  // comparison is exact, so a $1 gap is always a $1 gap.
+  t = M.computeTotals([comp(100, 80)], [trade(81)], 80);
+  eq(t.settlement.kind, "customer", `$1 over is customer-pays, not "even"`);
+  eq(t.settlement.amount, 1, `and the amount is exactly $1`);
+  t = M.computeTotals([comp(100, 80)], [trade(79)], 80);
+  eq(t.settlement.kind, "vendor", `$1 under is vendor-pays`);
+  eq(t.settlement.amount, 1, `and the amount is exactly $1`);
+
+  group("Displayed figures reconcile with stored figures");
+  // The old bug: a stored 12.4 rendered as "12" in the row but summed as 12.4,
+  // so the visible rows didn't add up to the visible total.
+  const rows = [comp(12.4, 100), comp(12.4, 100), comp(12.4, 100)];
+  const normalized = M.normalizeItems(rows);
+  eq(normalized[0].price, 12, `legacy 12.4 normalizes to 12`);
+  t = M.computeTotals(normalized, [], 100);
+  eq(t.market, 36, `three rows shown as $12 total exactly $36`);
+  const shown = normalized.reduce((s, x) => s + Number(M.fmtMoney(x.price).replace(/,/g, "")), 0);
+  eq(shown, t.market, `sum of the displayed row values === displayed total`);
+
+  eq(M.normalizeItems([{ price: "1,250.75", pct: "0" }])[0].price, 1251, `normalize parses stored strings`);
+  eq(M.normalizeItems([{ price: 10, pct: "0" }])[0].pct, 0, `normalize preserves a real 0% rate`);
+  eq(M.normalizeItems(null).length, 0, `normalize(null) is safe`);
+
+  group("Formatting");
+  eq(M.fmtMoney(1299), "1,299", `1299 -> "1,299"`);
+  eq(M.fmtMoney(0), "0", `0 -> "0"`);
+  eq(M.fmtMoney(12.6), "13", `a stray float still displays as a whole dollar`);
+  ok(M.fmtMoney(1299).indexOf(".") === -1, `no decimal point appears anywhere`);
+
+  group("Row ids");
+  const ids = new Set();
+  for (let i = 0; i < 5000; i++) ids.add(M.nextId());
+  eq(ids.size, 5000, `5000 ids in a tight loop are all unique (Date.now() alone collides)`);
+
+  // ── Summary ────────────────────────────────────────────────
+  summary.className = "sum " + (failed ? "fail" : "pass");
+  summary.textContent = failed
+    ? `${failed} FAILED, ${passed} passed`
+    : `All ${passed} assertions passed`;
+  document.title = (failed ? `${failed} FAILED · ` : "PASS · ") + "money tests";
+  window.__testResult = { passed, failed };
+</script>
+</body>
+</html>

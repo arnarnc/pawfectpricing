@@ -252,6 +252,8 @@
       overflow-y: auto;
       z-index: 20;
       box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      /* Rebuilding the rows can't invalidate layout outside this box. */
+      contain: layout style;
     }
     .suggestions div {
       padding: 10px 14px;
@@ -285,6 +287,97 @@
       letter-spacing: .03em; text-transform: uppercase;
       background: var(--surface); color: var(--purple); opacity: .85;
     }
+
+    /* Recent-search rows sit above the catalog and are tinted so the split
+       between "what I looked up" and "what exists" is readable at a glance. */
+    .suggestions div.recent-sug { background: rgba(124,58,237,0.07); }
+    .suggestions div.recent-sug:hover { background: rgba(124,58,237,0.16); }
+    .suggestions .sug-src.recent {
+      margin-left: 0; margin-right: 2px;
+      background: rgba(124,58,237,0.22); color: #a78bfa; opacity: 1;
+    }
+
+    /* ── Sync ── */
+    .sync-link {
+      position: absolute;
+      top: 0; right: 34px;
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      color: var(--text3);
+      font-size: 13px;
+      cursor: pointer;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, color 0.15s;
+    }
+    .sync-link:hover { background: var(--border2); color: var(--text2); }
+    .sync-link.on    { color: #4ade80; border-color: rgba(74,222,128,0.35); }
+    .sync-link.err   { color: #f87171; border-color: rgba(248,113,113,0.35); }
+    .sync-link.busy  { color: #a78bfa; }
+
+    .modal-back {
+      position: fixed; inset: 0; z-index: 50;
+      background: rgba(0,0,0,0.65);
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+    }
+    .modal {
+      width: 100%; max-width: 400px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      display: flex; flex-direction: column; gap: 12px;
+      max-height: 88vh; overflow-y: auto;
+    }
+    .modal h2 { font-size: 16px; font-weight: 700; }
+    .modal p  { font-size: 12px; color: var(--text2); line-height: 1.5; }
+    .modal ol { font-size: 12px; color: var(--text2); line-height: 1.6; padding-left: 18px; }
+    .modal a  { color: #a78bfa; }
+    .modal code {
+      background: var(--surface2); padding: 1px 5px; border-radius: 4px;
+      font-size: 11px; color: var(--text);
+    }
+    .modal input[type="password"], .modal input[type="text"] {
+      width: 100%;
+      background: var(--surface2);
+      border: 1.5px solid var(--border);
+      color: var(--text);
+      padding: 11px 12px;
+      font-size: 13px;
+      font-family: inherit;
+      border-radius: var(--r);
+      outline: none;
+    }
+    .modal input:focus { border-color: var(--purple); }
+    .modal-actions { display: flex; gap: 8px; }
+    .modal-actions button {
+      flex: 1;
+      padding: 11px;
+      border: none;
+      border-radius: var(--r);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--text);
+      transition: filter 0.15s;
+    }
+    .modal-actions button:hover { filter: brightness(1.12); }
+    .btn-primary { background: var(--purple); }
+    .btn-ghost   { background: var(--surface2); color: var(--text2); }
+    .btn-danger  { background: transparent; color: #f87171; border: 1px solid rgba(248,113,113,0.25) !important; }
+    .sync-status {
+      font-size: 12px; font-weight: 600;
+      padding: 9px 12px; border-radius: var(--r);
+      background: var(--surface2); color: var(--text2);
+    }
+    .sync-status.ok   { color: #4ade80; }
+    .sync-status.err  { color: #f87171; }
 
     /* Status badge */
     .status-wrap { min-height: 18px; }
@@ -401,6 +494,21 @@
       word-break: break-word;
       padding-right: 4px;
     }
+    /* The comp row's card name doubles as "look this one up again" — it drops
+       the card straight back into the search box. */
+    .card-label-btn {
+      background: none;
+      border: none;
+      font-family: inherit;
+      font-size: 13px;
+      text-align: left;
+      cursor: pointer;
+      padding: 2px 4px 2px 0;
+      border-radius: var(--r-sm);
+      transition: color 0.1s;
+    }
+    .card-label-btn:hover { color: #a78bfa; text-decoration: underline; }
+    .card-label-btn:focus-visible { outline: 2px solid var(--purple); outline-offset: 1px; }
     .comp-price-input {
       background: var(--surface2);
       border: 1px solid var(--border2);
@@ -666,6 +774,9 @@
 <div class="card">
 
   <a href="help.html" class="help-link" title="How to use">?</a>
+  <button class="sync-link" id="syncBtn" onclick="openSync()" title="Sync recent searches">⇅</button>
+
+  <div id="syncModal"></div>
 
   <!-- Header -->
   <div class="header">
@@ -702,17 +813,17 @@
       </div>
     </div>
     <div class="btn-row" id="btnRow">
-      <a id="worldwideSoldLink" class="btn-sold" target="_blank">
+      <a id="worldwideSoldLink" class="btn-sold" target="_blank" onclick="recordSearch()">
         <span class="btn-icon">🌍</span>
         <span class="btn-label">Global</span>
         <span class="btn-sub">Sold</span>
       </a>
-      <a id="auSoldLink" class="btn-sold" target="_blank">
+      <a id="auSoldLink" class="btn-sold" target="_blank" onclick="recordSearch()">
         <span class="btn-icon">🇦🇺</span>
         <span class="btn-label">Australia</span>
         <span class="btn-sub">Sold</span>
       </a>
-      <a id="worldwideCheapLink" class="btn-cheap" target="_blank">
+      <a id="worldwideCheapLink" class="btn-cheap" target="_blank" onclick="recordSearch()">
         <span class="btn-icon">💰</span>
         <span class="btn-label">Cheapest</span>
         <span class="btn-sub">Buy Now</span>
@@ -747,7 +858,8 @@
     <div class="comp-entry">
       <div class="price-wrap">
         <span class="price-prefix">$</span>
-        <input type="text" inputmode="numeric" id="priceInput" placeholder="0" oninput="formatPriceInput(this)" />
+        <input type="text" inputmode="decimal" id="priceInput" placeholder="0"
+               oninput="formatPriceInput(this)" onchange="commitPriceInput(this)" onblur="commitPriceInput(this)" />
       </div>
       <button class="add-btn" onclick="addToComp()">+ Add to List</button>
     </div>
@@ -761,6 +873,11 @@
 
 </div>
 
+<!-- ?v= is a cache buster. GitHub Pages serves these with a 10-minute cache, so
+     without it a phone can keep running an old copy of the money rules after a
+     deploy. Bump the number whenever money.js or recents.js changes. -->
+<script src="money.js?v=1"></script>
+<script src="recents.js?v=3"></script>
 <script src="cards.js"></script>
 <script src="cards_jp.js"></script>
 <script>
@@ -798,11 +915,20 @@
       if (e.key === "Enter" && desktopMode) { e.preventDefault(); openAll(); }
     });
     document.addEventListener("keydown", e => {
-      if (e.key === "Escape" && Object.keys(openWins).length) {
-        e.preventDefault();
-        closeAll();
-      }
+      if (e.key !== "Escape") return;
+      if (document.getElementById("syncModal").innerHTML) { e.preventDefault(); closeSync(); return; }
+      if (Object.keys(openWins).length) { e.preventDefault(); closeAll(); }
     });
+    // Recents: repaint the sync badge on any change, and pull the other
+    // device's searches on load / whenever this tab is brought back into view.
+    Recents.onChange(() => { syncBadge(); renderSuggestionsIfOpen(); });
+    Recents.startAutoSync();
+    syncBadge();
+
+    // Merge the English + Japanese datasets now, while the app is sitting idle,
+    // so the first keystroke doesn't pay for it mid-type.
+    (window.requestIdleCallback || (fn => setTimeout(fn, 200)))(() => getAllCards());
+    window.addEventListener("pagehide", flushLastCard);
   });
   function onToggleAuctions() {
     excludeAuctions = document.getElementById("excludeAuctions").checked;
@@ -838,6 +964,7 @@
   function openAll() {
     const value = document.getElementById("cardInput").value.trim();
     if (!value) { document.getElementById("cardInput").focus(); return; }
+    recordSearch();
     closeAll(); // close any existing panels before opening a fresh set
     const urls = buildUrls(value);
     // Top-to-bottom: World Sold, AU Sold, Cheapest.
@@ -933,10 +1060,25 @@
     };
   }
 
+  // localStorage writes are synchronous and block the main thread. Saving the
+  // in-progress query on literally every keystroke is the one place this app
+  // did that in a hot loop; a short debounce keeps the crash-recovery behaviour
+  // without the per-character stall. Flushed on pagehide so nothing is lost.
+  let lastCardTimer = null;
+  function saveLastCard(v) {
+    clearTimeout(lastCardTimer);
+    lastCardTimer = setTimeout(() => localStorage.setItem("lastCard", v), 400);
+  }
+  function flushLastCard() {
+    clearTimeout(lastCardTimer);
+    const ci = document.getElementById("cardInput");
+    if (ci) localStorage.setItem("lastCard", ci.value);
+  }
+
   function update() {
     const value = document.getElementById("cardInput").value.trim();
     const statusEl = document.getElementById("status");
-    localStorage.setItem("lastCard", document.getElementById("cardInput").value);
+    saveLastCard(document.getElementById("cardInput").value);
     if (!value) { statusEl.innerHTML = ""; closeAll(); return; }
     const urls = buildUrls(value);
     document.getElementById("worldwideSoldLink").href  = urls.worldwideSold;
@@ -963,13 +1105,20 @@
     const { name, number, total } = parseCardQuery(ci.value);
     const cores = nameCores(name);
 
+    // Cards you've actually searched before, newest first. Computed here so
+    // every paint below (instant local, then the merged live result) keeps them
+    // pinned to the top instead of letting a late API response bury them.
+    const recents = recentRows(cores, number, total);
+
     // Short/empty fragment (e.g. a lone letter): just the offline name list —
     // a real card search would match half the database and isn't useful yet.
+    // Recents still show: one letter is enough to surface something you looked
+    // up an hour ago, which is the whole point of remembering them.
     if (!cores.length || (cores.length === 1 && cores[0].length < 2)) {
       cardLookupSeq++;
       clearTimeout(cardLookupTimer);
       if (cardLookupCtrl) cardLookupCtrl.abort();
-      paintSuggestions(null, null);
+      paintSuggestions(null, null, recents);
       return;
     }
 
@@ -983,9 +1132,177 @@
     if (cardLookupCtrl) cardLookupCtrl.abort();
 
     const local = searchLocalCards(cores, number, total) || [];
-    paintSuggestions(local.length ? rankAndDedupe(local, name, number, total) : null, seq);
+    paintSuggestions(local.length ? rankAndDedupe(local, name, number, total) : null, seq, recents);
 
-    liveCardLookup(name, number, total, cores, local, seq);
+    if (needsLiveLookup(local, number, total)) {
+      liveCardLookup(name, number, total, cores, local, seq, recents);
+    }
+  }
+
+  // The bundled catalogue answers almost everything, so the network is a
+  // last resort rather than a parallel path. Two ways a query is already
+  // settled locally and a request could only repeat what's on screen:
+  //
+  //   1. An exact hit on a fully-typed "125/197" — that IS the card. This is
+  //      the common shape when pricing a specific card in hand.
+  //   2. More matches than the dropdown can show — the API could only reorder
+  //      rows that are already visible.
+  //
+  // Anything else (a thin result, or nothing at all) means the card may be too
+  // new or too obscure for the snapshot, which is exactly when the API earns
+  // its round trip.
+  function needsLiveLookup(local, number, total) {
+    if (number && total) {
+      const exact = `${number}/${total}`.toLowerCase();
+      for (let i = 0; i < local.length; i++) {
+        if (String(local[i].num).toLowerCase() === exact) return false;
+      }
+    }
+    return local.length < SUGGESTION_LIMIT;
+  }
+
+  // How many rows the dropdown shows. Also the "is the local result complete?"
+  // threshold above, so the two can't drift apart.
+  const SUGGESTION_LIMIT = 12;
+
+  // ── Recent searches ───────────────────────────────────────
+  // A search only counts when one is actually run — an eBay button on mobile,
+  // or Compare prices in desktop mode. Typing alone doesn't count, so the list
+  // stays a record of cards you decided to look up rather than every keystroke.
+  function recordSearch() {
+    const v = document.getElementById("cardInput").value.trim();
+    if (!v || !window.Recents) return;
+    Recents.record(v, parseCardQuery);
+  }
+
+  function recentRows(cores, number, total) {
+    if (!window.Recents) return [];
+    return Recents.match(cores, number, total, 6).map(it => ({
+      name: it.q,
+      num:  "",
+      set:  "",
+      src:  "recent",
+      fill: it.q,                                   // refill exactly what was searched
+      dupKey: (it.nm || "") + "|" + (it.num || ""), // to drop the catalog's copy
+      t: it.t
+    }));
+  }
+
+  // Recents on top, then the catalog/API rows with any duplicate of a recent
+  // removed — the same card shouldn't occupy two slots in a 12-row dropdown.
+  function withRecents(recents, rows) {
+    if (!recents || !recents.length) return rows || [];
+    const seen = new Set(recents.map(r => r.dupKey));
+    return recents.concat((rows || []).filter(
+      r => !seen.has(r.name.toLowerCase() + "|" + r.num)
+    ));
+  }
+
+  function relTime(t) {
+    const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+    if (s < 60)     return "just now";
+    if (s < 3600)   return Math.floor(s / 60) + "m ago";
+    if (s < 86400)  return Math.floor(s / 3600) + "h ago";
+    if (s < 604800) return Math.floor(s / 86400) + "d ago";
+    return new Date(t).toLocaleDateString("en-AU", { day: "numeric", month: "short" });
+  }
+
+  // ── Sync panel ────────────────────────────────────────────
+  function syncBadge() {
+    const btn = document.getElementById("syncBtn");
+    if (!btn || !window.Recents) return;
+    const s = Recents.getState();
+    btn.className = "sync-link"
+      + (s.status === "ok" ? " on" : s.status === "error" ? " err" : s.status === "syncing" ? " busy" : "");
+    btn.title = s.configured
+      ? `Sync — ${s.message || s.status} (${Recents.count()} recent searches)`
+      : `Sync recent searches across devices (${Recents.count()} stored locally)`;
+  }
+
+  function openSync() {
+    const s = Recents.getState();
+    const host = document.getElementById("syncModal");
+    host.innerHTML = `
+      <div class="modal-back" onclick="if(event.target===this) closeSync()">
+        <div class="modal">
+          <h2>Sync recent searches</h2>
+          <div class="sync-status ${s.status === 'ok' ? 'ok' : s.status === 'error' ? 'err' : ''}" id="syncMsg">
+            ${s.configured ? escHtml(s.message || "Connected") : "Not connected — this device only"}
+          </div>
+          <p><strong>${Recents.count()}</strong> recent searches stored on this device
+             (newest ${Recents.SYNC_ITEMS} are synced).</p>
+          ${s.configured ? `<p>Last checked ${s.lastSync ? escHtml(relTime(s.lastSync)) : "never"}${s.pending ? " · changes queued to upload" : ""}.
+             Syncing runs by itself in the background — you never have to wait for it,
+             and searches are saved on this device first.</p>` : ""}
+          ${s.configured ? "" : `
+          <p>This page has no server, so syncing goes through a private GitHub gist on your own account. Free, and nothing is published.</p>
+          <ol>
+            <li>Open <a href="https://github.com/settings/tokens/new?scopes=gist&description=Pawfect%20Pricing%20sync" target="_blank" rel="noopener">this GitHub token page</a> — the <code>gist</code> scope is pre-ticked.</li>
+            <li>Set expiry to <em>No expiration</em>, click <strong>Generate token</strong>, copy it.</li>
+            <li>Paste it below. Repeat on your other device with the <em>same</em> token — it finds the same gist automatically.</li>
+          </ol>`}
+          ${s.configured ? "" : `<input type="password" id="syncTokenInput" placeholder="ghp_… paste your token" autocomplete="off" />`}
+          <div class="modal-actions">
+            ${s.configured
+              ? `<button class="btn-primary" onclick="syncNow()">Sync now</button>
+                 <button class="btn-ghost" onclick="closeSync()">Close</button>`
+              : `<button class="btn-primary" onclick="syncConnect()">Connect</button>
+                 <button class="btn-ghost" onclick="closeSync()">Cancel</button>`}
+          </div>
+          ${s.configured ? `<div class="modal-actions">
+            <button class="btn-danger" onclick="syncDisconnect()">Disconnect this device</button>
+          </div>` : ""}
+          <div class="modal-actions">
+            <button class="btn-danger" onclick="syncClearRecents()">Clear recent searches</button>
+          </div>
+        </div>
+      </div>`;
+    const inp = document.getElementById("syncTokenInput");
+    if (inp) inp.focus();
+  }
+
+  function closeSync() { document.getElementById("syncModal").innerHTML = ""; }
+
+  function syncMsg(text, cls) {
+    const el = document.getElementById("syncMsg");
+    if (el) { el.textContent = text; el.className = "sync-status " + (cls || ""); }
+  }
+
+  function syncConnect() {
+    const inp = document.getElementById("syncTokenInput");
+    const tok = inp ? inp.value.trim() : "";
+    if (!tok) { syncMsg("Paste a token first", "err"); return; }
+    syncMsg("Connecting…", "");
+    Recents.connect(tok)
+      .then(() => { openSync(); renderSuggestionsIfOpen(); })
+      .catch(() => openSync());
+  }
+
+  function syncNow() {
+    syncMsg("Syncing…", "");
+    Recents.pull(true)
+      .then(() => Recents.push(true))
+      .then(() => { openSync(); renderSuggestionsIfOpen(); });
+  }
+
+  function syncDisconnect() {
+    if (!confirm("Stop syncing on this device? Your recent searches stay here, and stay in the gist.")) return;
+    Recents.disconnect();
+    openSync();
+  }
+
+  function syncClearRecents() {
+    if (!confirm("Clear all recent searches? On synced devices this clears them everywhere.")) return;
+    Recents.clear();
+    Recents.push(true).then(() => openSync());
+    openSync();
+  }
+
+  // A pull can land while the dropdown is open; repaint so the newly arrived
+  // searches from the other device appear without needing another keystroke.
+  function renderSuggestionsIfOpen() {
+    const box = document.getElementById("suggestions");
+    if (box && box.children.length) { lastSuggestSig = ""; renderSuggestions(); }
   }
 
   // ── Local card dataset (cards.js) ──────────────────────────
@@ -1001,9 +1318,19 @@
     if (allCards) return allCards;
     const en = (typeof CARDS !== "undefined" && CARDS) ? CARDS : [];
     const jp = (typeof CARDS_JP !== "undefined" && CARDS_JP) ? CARDS_JP : [];
-    allCards = jp.length
-      ? en.concat(jp).sort((a, b) => (a[4] < b[4] ? 1 : a[4] > b[4] ? -1 : 0))
-      : en;
+    if (!jp.length) { allCards = en; return allCards; }
+    // Both files are already written newest-first, so this is a single linear
+    // interleave rather than a concat + comparator sort of ~25k rows. Rows with
+    // no release date (older Japanese sets) compare as "" and fall to the end,
+    // which is exactly where the old sort put them.
+    const out = new Array(en.length + jp.length);
+    let i = 0, j = 0, k = 0;
+    while (i < en.length && j < jp.length) {
+      out[k++] = en[i][4] >= jp[j][4] ? en[i++] : jp[j++];
+    }
+    while (i < en.length) out[k++] = en[i++];
+    while (j < jp.length) out[k++] = jp[j++];
+    allCards = out;
     return allCards;
   }
 
@@ -1097,18 +1424,20 @@
   // input). Skips the DOM rebuild entirely when the result is identical to
   // what's already shown — so the local→merge handoff never flickers.
   let lastSuggestSig = "";
-  function paintSuggestions(apiResults, seq) {
+  function paintSuggestions(apiResults, seq, recents) {
     if (seq !== null && seq !== cardLookupSeq) return;
     const box = document.getElementById("suggestions");
-    const rows = (apiResults && apiResults.length) ? apiResults : null;
-    const sig = rows
-      ? "c:" + rows.map(r => r.name + "|" + r.num + "|" + r.set).join("~")
-      : "n:" + document.getElementById("cardInput").value.toLowerCase();
+    const cards = (apiResults && apiResults.length) ? apiResults : null;
+    const rows = withRecents(recents, cards || []);
+    // Signature covers the recents too, and still folds in the raw input when
+    // the offline name list is what's being shown below them.
+    const sig = "c:" + rows.map(r => r.src + r.name + "|" + r.num + "|" + r.set).join("~")
+      + (cards ? "" : "|n:" + document.getElementById("cardInput").value.toLowerCase());
     if (sig === lastSuggestSig) return; // identical to what's shown — no rebuild
     lastSuggestSig = sig;
     box.innerHTML = "";
-    if (rows) rows.forEach(r => box.appendChild(makeCardRow(r)));
-    else appendOfflineNames(box, document.getElementById("cardInput").value);
+    rows.forEach(r => box.appendChild(makeCardRow(r)));
+    if (!cards) appendOfflineNames(box, document.getElementById("cardInput").value);
   }
 
   // Close the dropdown AND cancel any pending/in-flight lookup, so a late API
@@ -1141,12 +1470,16 @@
   }
 
   function makeCardRow(r) {
-    const fill = `${r.name} ${r.num}`;
+    const fill = r.fill || `${r.name} ${r.num}`;
     const div = document.createElement("div");
-    div.className = "card-sug";
+    div.className = "card-sug" + (r.src === "recent" ? " recent-sug" : "");
     div.dataset.fill = fill;
-    div.innerHTML =
-      `<span class="sug-name">${escapeHtml(r.name)}</span>`
+    div.innerHTML = r.src === "recent"
+      // A recent row replays the exact query that was searched (graders and
+      // conditions included), so its meta line is "when", not "which set".
+      ? `<span class="sug-name">${escapeHtml(r.name)}</span>`
+        + `<span class="sug-meta"><span class="sug-src recent">↺ recent</span> ${escapeHtml(relTime(r.t))}</span>`
+      : `<span class="sug-name">${escapeHtml(r.name)}</span>`
       + `<span class="sug-meta"><span class="sug-num">${escapeHtml(r.num)}</span>`
       + (r.set ? ` · ${escapeHtml(r.set)}` : "")
       + (r.src === "intl" ? ` <span class="sug-src">intl</span>` : "")
@@ -1181,10 +1514,10 @@
   let cardLookupCtrl  = null;  // AbortController for the pending fetch
   const cardCache = new Map(); // q -> results, so repeats don't refetch
 
-  function liveCardLookup(name, number, total, cores, localResults, seq) {
+  function liveCardLookup(name, number, total, cores, localResults, seq, recents) {
     const q = buildPtcgQuery(cores, number, total);
     if (!q) return;
-    if (cardCache.has(q)) { mergeAndPaint(cardCache.get(q), localResults, name, number, total, seq); return; }
+    if (cardCache.has(q)) { mergeAndPaint(cardCache.get(q), localResults, name, number, total, seq, recents); return; }
 
     cardLookupTimer = setTimeout(() => {
       if (seq !== cardLookupSeq) return; // a newer keystroke replaced this query already
@@ -1207,7 +1540,7 @@
             if (cardCache.size >= 300) cardCache.clear(); // keep the cache bounded
             cardCache.set(q, results);
           }
-          mergeAndPaint(results, localResults, name, number, total, seq);
+          mergeAndPaint(results, localResults, name, number, total, seq, recents);
         })
         .catch(err => {
           if (err && err.name === "AbortError") return; // superseded by a newer keystroke
@@ -1221,11 +1554,11 @@
   // what was typed (exact name, exact number/total) rises to the top — that's
   // how a later-arriving API match can "jump up" over what local showed first.
   // Ties fall back to each source's own order (both already sort newest-first).
-  function mergeAndPaint(networkResults, localResults, name, number, total, seq) {
+  function mergeAndPaint(networkResults, localResults, name, number, total, seq, recents) {
     if (seq !== cardLookupSeq) return; // stale — a newer keystroke has moved on
     const merged = rankAndDedupe([...localResults, ...networkResults], name, number, total);
-    if (merged.length) paintSuggestions(merged, seq);
-    else if (!localResults.length) paintSuggestions(null, seq); // both empty -> offline names
+    if (merged.length) paintSuggestions(merged, seq, recents);
+    else if (!localResults.length) paintSuggestions(null, seq, recents); // both empty -> offline names
   }
 
   function rankAndDedupe(list, name, number, total) {
@@ -1252,7 +1585,7 @@
     return deduped
       .map((r, i) => ({ r, i, s: score(r) }))
       .sort((a, b) => b.s - a.s || a.i - b.i) // higher score first; stable tiebreak
-      .slice(0, 12)
+      .slice(0, SUGGESTION_LIMIT)
       .map(x => x.r);
   }
 
@@ -1347,7 +1680,7 @@
     input.focus();
     closeSuggestions();       // also cancels any pending/in-flight lookup
     document.getElementById("status").innerHTML = "";
-    localStorage.setItem("lastCard", "");
+    flushLastCard();          // cancels the pending debounced write, then stores ""
     closeAll(); // clearing the box closes any open panels
   }
 
@@ -1357,16 +1690,19 @@
   });
 
   // ── Trading Out ───────────────────────────────────────────
-  let tradeItems = JSON.parse(localStorage.getItem("tradeItems") || "[]");
+  let tradeItems = Money.normalizeItems(JSON.parse(localStorage.getItem("tradeItems") || "[]"));
 
   function saveTrade() { localStorage.setItem("tradeItems", JSON.stringify(tradeItems)); }
 
   function addTradeItem() {
-    tradeItems.push({ id: Date.now(), name: "Trade-Out Item", price: 0 });
+    tradeItems.push({ id: Money.nextId(), name: "Trade-Out Item", price: 0 });
     saveTrade();
     renderComp();
+    // Land on the VALUE, not the name. The name has a usable default and the
+    // number is the thing you actually came to type, so this saves a tap on
+    // every single vendor item.
     setTimeout(() => {
-      const inputs = document.querySelectorAll(".trade-name-input");
+      const inputs = document.querySelectorAll(".trade-price-input");
       if (inputs.length) inputs[inputs.length - 1].focus();
     }, 0);
   }
@@ -1394,65 +1730,69 @@
     refreshSettlement();
   }
 
+  // Class name per settlement kind — one map, used by both render paths so the
+  // live update and the full rebuild can never disagree about the colour.
+  const SETTLE_CLASS = { even: "even-trade", customer: "pay-customer", vendor: "pay-vendor", none: "" };
+
   function refreshSettlement() {
-    const tradeTotal  = tradeItems.filter(x => !x.excluded).reduce((s, x) => s + x.price, 0);
-    const payoutTotal = compItems.filter(x => !x.excluded).reduce((s, x) => s + x.price * (x.pct / 100), 0);
-    const diff = tradeTotal - payoutTotal;
+    const t = Money.computeTotals(compItems, tradeItems, headerPct);
 
     const tEl = document.getElementById("tradeTotalVal");
     if (tEl) {
-      tEl.textContent = `$${fmtUSD(tradeTotal)}`;
-      tEl.closest(".subtotal-row").style.display = tradeTotal > 0.005 ? "" : "none";
+      tEl.textContent = `$${fmtUSD(t.trade)}`;
+      tEl.closest(".subtotal-row").style.display = t.trade > 0 ? "" : "none";
     }
 
     const ctEl = document.getElementById("compTrade");
     const ctRow = document.getElementById("compTradeRow");
     if (ctEl && ctRow) {
-      ctEl.textContent = `$${fmtUSD(tradeTotal)}`;
-      ctRow.style.display = tradeTotal > 0.005 ? "" : "none";
+      ctEl.textContent = `$${fmtUSD(t.trade)}`;
+      ctRow.style.display = t.trade > 0 ? "" : "none";
     }
 
     const sEl = document.getElementById("settlementResult");
     const sDivider = document.getElementById("settlementDivider");
     if (!sEl) return;
 
-    const hasValue = tradeTotal > 0.005 || payoutTotal > 0.005;
-    sEl.style.display = hasValue ? "" : "none";
-    if (sDivider) sDivider.style.display = hasValue ? "" : "none";
-    if (!hasValue) return;
+    const s = t.settlement;
+    sEl.style.display = s.hasValue ? "" : "none";
+    if (sDivider) sDivider.style.display = s.hasValue ? "" : "none";
+    if (!s.hasValue) return;
 
-    const isEven = Math.abs(diff) < 0.005 && tradeTotal > 0.005 && payoutTotal > 0.005;
-    if (isEven) {
-      sEl.className = "settlement-result even-trade";
-      sEl.innerHTML = `<span class="r-label"><span class="total-op">=</span>Direct Trade</span><span class="r-val">Even</span>`;
-    } else if (diff > 0.005) {
-      sEl.className = "settlement-result pay-customer";
-      sEl.innerHTML = `<span class="r-label"><span class="total-op">=</span>Customer to Pay</span><span class="r-val">$${fmtUSD(diff)}</span>`;
-    } else {
-      sEl.className = "settlement-result pay-vendor";
-      sEl.innerHTML = `<span class="r-label"><span class="total-op">=</span>Vendor to Pay</span><span class="r-val">$${fmtUSD(Math.abs(diff))}</span>`;
-    }
+    sEl.className = "settlement-result " + SETTLE_CLASS[s.kind];
+    sEl.innerHTML = `<span class="r-label"><span class="total-op">=</span>${s.label}</span>`
+      + `<span class="r-val">${s.kind === "even" ? "Even" : "$" + fmtUSD(s.amount)}</span>`;
   }
 
   // ── Comp list ─────────────────────────────────────────────
-  let compItems = JSON.parse(localStorage.getItem("compItems") || "[]");
+  // normalizeItems pulls anything saved before the whole-dollar rule (which
+  // could hold cents) onto integers, so an old list totals what it displays.
+  let compItems = Money.normalizeItems(JSON.parse(localStorage.getItem("compItems") || "[]"));
   let headerPct = 80;
 
   function escHtml(s) {
     return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   }
-  function fmtUSD(n) {
-    return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }
-  function fmtInt(n) {
-    return Math.round(n).toLocaleString("en-US");
-  }
-  function cleanNum(s) {
-    return parseFloat(String(s).replace(/,/g, "")) || 0;
-  }
+  // All money handling lives in money.js (whole dollars, no cents anywhere) so
+  // it can be exercised by tests.html. These are thin delegates.
+  const fmtUSD   = Money.fmtMoney;
+  const fmtInt   = Money.fmtMoney;
+  const cleanNum = Money.toDollars;
+
+  // While typing: keep the caret sane and don't destroy a half-typed "12.".
   function formatPriceInput(el) {
-    const digits = el.value.replace(/[^\d]/g, "");
-    el.value = digits ? Number(digits).toLocaleString("en-US") : "";
+    const before = el.value;
+    const caretFromEnd = before.length - (el.selectionStart ?? before.length);
+    el.value = Money.livePriceText(before);
+    const pos = Math.max(0, el.value.length - caretFromEnd);
+    try { el.setSelectionRange(pos, pos); } catch (e) {}
+  }
+
+  // On commit (blur / change): round to whole dollars and rewrite the field, so
+  // what's shown is exactly what's stored and totalled — "12.50" becomes "13",
+  // never "1,250".
+  function commitPriceInput(el) {
+    el.value = Money.commitPrice(el.value).text;
   }
   function saveComp() { localStorage.setItem("compItems", JSON.stringify(compItems)); }
 
@@ -1461,14 +1801,33 @@
     const raw   = document.getElementById("priceInput").value;
     const price = cleanNum(raw);
     if (!label || raw === "") return;
-    compItems.push({ id: Date.now(), label, price, pct: headerPct });
+    compItems.push({ id: Money.nextId(), label, price, pct: headerPct });
     saveComp();
     renderComp();
     document.getElementById("priceInput").value = "";
   }
 
+  // The header select's placeholder used to carry value="100", so brushing past
+  // it silently set every row to a 100% payout — the most expensive possible
+  // misclick. It now carries no value and is ignored here.
+  // Click a comp row's card name to load it back into the search box, ready to
+  // re-check its price. The comp list is the natural record of what you're
+  // pricing, so it doubles as a way back to any card in it.
+  function searchCompLabel(id) {
+    const item = compItems.find(x => x.id === id);
+    if (!item) return;
+    const ci = document.getElementById("cardInput");
+    ci.value = item.label;
+    update();
+    closeSuggestions();   // it's an exact card already — don't cover the buttons
+    ci.focus();
+    ci.setSelectionRange(ci.value.length, ci.value.length);
+    ci.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+
   function cascadePct(val) {
-    const newPct = parseInt(val) || 100;
+    if (val === "" || val == null) { renderComp(); return; }
+    const newPct = Money.toPct(val, headerPct);
     const isMixed = new Set(compItems.map(x => x.pct)).size > 1;
     if (isMixed && !confirm(`Some items have different payout rates. Set all ${compItems.length} items to ${newPct}%?`)) {
       renderComp();
@@ -1497,12 +1856,14 @@
   function saveAndClearComp() {
     if (compItems.length > 0 || tradeItems.length > 0) {
       savedComps.unshift({
-        id: Date.now(),
+        id: Money.nextId(),
         label: topCompLabel(compItems),
         compItems: JSON.parse(JSON.stringify(compItems)),
         tradeItems: JSON.parse(JSON.stringify(tradeItems))
       });
-      savedComps.length = Math.min(savedComps.length, 5);
+      // Kept on this device only — a comp set is a live negotiation, not
+      // something you'd resume on another phone. (Recent searches do sync.)
+      savedComps.length = Math.min(savedComps.length, MAX_SAVED_COMPS);
       saveSavedComps();
     }
     compItems = [];
@@ -1515,7 +1876,8 @@
   // ── Saved comp sets (queue of last 5, surfaced as tabs) ──
   // Selecting a tab loads that set straight into the active editor — pre-filled
   // and fully editable (add/remove items) — same as starting a new comp.
-  let savedComps = JSON.parse(localStorage.getItem("savedComps") || "[]");
+  const MAX_SAVED_COMPS = 10;
+  let savedComps = JSON.parse(localStorage.getItem("savedComps") || "[]").slice(0, MAX_SAVED_COMPS);
 
   function saveSavedComps() { localStorage.setItem("savedComps", JSON.stringify(savedComps)); }
 
@@ -1528,9 +1890,9 @@
   function selectSavedTab(id) {
     const set = savedComps.find(s => s.id === id);
     if (!set) return;
-    compItems  = JSON.parse(JSON.stringify(set.compItems));
-    tradeItems = JSON.parse(JSON.stringify(set.tradeItems));
-    headerPct  = compItems.length ? compItems[0].pct : 100;
+    compItems  = Money.normalizeItems(JSON.parse(JSON.stringify(set.compItems)));
+    tradeItems = Money.normalizeItems(JSON.parse(JSON.stringify(set.tradeItems)));
+    headerPct  = compItems.length ? Money.toPct(compItems[0].pct, 100) : headerPct;
     savedComps = savedComps.filter(s => s.id !== id);
     saveComp();
     saveTrade();
@@ -1573,16 +1935,15 @@
     const item = compItems.find(x => x.id === id);
     if (!item) return;
     if (field === "price") item.price = cleanNum(val);
-    if (field === "pct")   item.pct   = parseInt(val)   || 100;
+    if (field === "pct")   item.pct   = Money.toPct(val, item.pct);
     saveComp();
-    const m = compItems.filter(x => !x.excluded).reduce((s, x) => s + x.price, 0);
-    const p = compItems.filter(x => !x.excluded).reduce((s, x) => s + x.price * (x.pct / 100), 0);
+    const t = Money.computeTotals(compItems, tradeItems, headerPct);
     const em = document.getElementById("compMarket");
     const ep = document.getElementById("compPayout");
     const er = document.getElementById("compRate");
-    if (em) em.textContent = `$${fmtUSD(m)}`;
-    if (ep) ep.textContent = `$${fmtUSD(p)}`;
-    if (er) er.textContent = `${(m > 0.005 ? (p / m * 100) : headerPct).toFixed(1)}%`;
+    if (em) em.textContent = `$${fmtUSD(t.market)}`;
+    if (ep) ep.textContent = `$${fmtUSD(t.payout)}`;
+    if (er) er.textContent = `${t.effRate.toFixed(1)}%`;
     refreshSettlement();
   }
 
@@ -1590,16 +1951,18 @@
     const section = document.getElementById("compSection");
     if (compItems.length === 0 && tradeItems.length === 0) { section.innerHTML = ""; renderSavedTabs(); return; }
 
-    const marketTotal = compItems.filter(x => !x.excluded).reduce((s, x) => s + x.price, 0);
-    const payoutTotal = compItems.filter(x => !x.excluded).reduce((s, x) => s + x.price * (x.pct / 100), 0);
-    const tradeTotal  = tradeItems.filter(x => !x.excluded).reduce((s, x) => s + x.price, 0);
-    const diff = tradeTotal - payoutTotal;
+    const totals = Money.computeTotals(compItems, tradeItems, headerPct);
+    const marketTotal = totals.market;
+    const payoutTotal = totals.payout;
+    const tradeTotal  = totals.trade;
 
     const pctOpts = v => [100,95,90,85,80,75,70,65,60,55,50]
       .map(p => `<option value="${p}"${p===v?' selected':''}>${p}%</option>`).join("");
 
+    // No option pre-selected: the placeholder stays showing so this control
+    // always reads as an action ("apply a rate to every row"), never as state.
     const headerOpts = [100,95,90,85,80,75,70,65,60,55,50]
-      .map(p => `<option value="${p}"${p===headerPct?' selected':''}>${p}%</option>`).join("");
+      .map(p => `<option value="${p}">${p}%</option>`).join("");
 
     // ── Trade-out rows ──
     const tradeRows = tradeItems.map(item => `
@@ -1615,11 +1978,13 @@
         <td>
           <span class="price-cell">
             <span class="price-cell-dollar">$</span>
-            <input class="comp-price-input" type="text" inputmode="numeric"
+            <input class="comp-price-input trade-price-input" type="text" inputmode="numeric"
               value="${item.price > 0 ? fmtInt(item.price) : ''}"
               placeholder="0"
+              onfocus="this.select()"
               oninput="formatPriceInput(this); updateTradeField(${item.id},'price',this.value)"
-              onchange="updateTradeField(${item.id},'price',this.value)" />
+              onchange="commitPriceInput(this); updateTradeField(${item.id},'price',this.value)"
+              onblur="commitPriceInput(this); updateTradeField(${item.id},'price',this.value)" />
           </span>
         </td>
         <td class="row-actions">
@@ -1637,7 +2002,7 @@
         </tr></thead>
         <tbody>${tradeRows}</tbody>
       </table>
-      <div class="subtotal-row" style="${tradeTotal > 0.005 ? '' : 'display:none'}">
+      <div class="subtotal-row" style="${tradeTotal > 0 ? '' : 'display:none'}">
         <span class="subtotal-label">Vendor's Items Value</span>
         <span class="subtotal-val orange" id="tradeTotalVal">$${fmtUSD(tradeTotal)}</span>
       </div>` : "";
@@ -1645,7 +2010,9 @@
     // ── Comp rows ──
     const compRows = compItems.map(item => `
       <tr class="item-row${item.excluded ? ' excluded' : ''}">
-        <td class="card-label">${escHtml(item.label)}</td>
+        <td><button type="button" class="card-label card-label-btn"
+              onclick="searchCompLabel(${item.id})"
+              title="Search this card again">${escHtml(item.label)}</button></td>
         <td>
           <span class="price-cell">
             <span class="price-cell-dollar">$</span>
@@ -1653,7 +2020,8 @@
               value="${item.price > 0 ? fmtInt(item.price) : ''}"
               placeholder="0"
               oninput="formatPriceInput(this); updateCompField(${item.id},'price',this.value)"
-              onchange="updateCompField(${item.id},'price',this.value)" />
+              onchange="commitPriceInput(this); updateCompField(${item.id},'price',this.value)"
+              onblur="commitPriceInput(this); updateCompField(${item.id},'price',this.value)" />
           </span>
         </td>
         <td>
@@ -1684,40 +2052,25 @@
           </div>
           <div class="total-row rate">
             <span class="total-label"><span class="total-op">&times;</span>Effective Payout Rate</span>
-            <span class="total-val" id="compRate">${(marketTotal > 0.005 ? (payoutTotal / marketTotal * 100) : headerPct).toFixed(1)}%</span>
+            <span class="total-val" id="compRate">${totals.effRate.toFixed(1)}%</span>
           </div>
           <hr class="total-sep">
           <div class="total-row payout">
             <span class="total-label"><span class="total-op">=</span>Customer's Items Payout</span>
             <span class="total-val" id="compPayout">$${fmtUSD(payoutTotal)}</span>
           </div>
-          <div class="total-row trade" id="compTradeRow" style="${tradeTotal > 0.005 ? '' : 'display:none'}">
+          <div class="total-row trade" id="compTradeRow" style="${tradeTotal > 0 ? '' : 'display:none'}">
             <span class="total-label"><span class="total-op">&minus;</span>Vendor's Items Value</span>
             <span class="total-val" id="compTrade">$${fmtUSD(tradeTotal)}</span>
           </div>
         </div>` : "";
 
-    // ── Settlement ──
-    // diff = tradeOut - payoutOffer
-    // positive → customer pays (they're getting more than they gave)
-    // negative → vendor pays (they owe more cash on top of the trade)
-    // zero with both values → direct trade; zero with no trade → vendor pays full payout
-    const hasValue = tradeTotal > 0.005 || payoutTotal > 0.005;
-    let settlementClass, settlementLabel, settlementVal;
-    const isEven = Math.abs(diff) < 0.005 && tradeTotal > 0.005 && payoutTotal > 0.005;
-    if (isEven) {
-      settlementClass = "even-trade";
-      settlementLabel = "Direct Trade";
-      settlementVal   = "Even";
-    } else if (diff > 0.005) {
-      settlementClass = "pay-customer";
-      settlementLabel = "Customer to Pay";
-      settlementVal   = `$${fmtUSD(diff)}`;
-    } else {
-      settlementClass = "pay-vendor";
-      settlementLabel = "Vendor to Pay";
-      settlementVal   = `$${fmtUSD(Math.abs(diff))}`;
-    }
+    // ── Settlement ── (see Money.settle for the sign convention)
+    const settlement = totals.settlement;
+    const hasValue = settlement.hasValue;
+    const settlementClass = SETTLE_CLASS[settlement.kind];
+    const settlementLabel = settlement.label;
+    const settlementVal   = settlement.kind === "even" ? "Even" : `$${fmtUSD(settlement.amount)}`;
 
     section.innerHTML = `
       <hr class="divider">
@@ -1738,7 +2091,7 @@
         <div class="block-hdr">
           <span class="section-label">Customer's Items (${compItems.length} ${compItems.length === 1 ? "Item" : "Items"}${compItems.some(x=>x.excluded) ? `, ${compItems.filter(x=>x.excluded).length} excluded` : ""})</span>
           <select class="comp-pct-select" onchange="cascadePct(this.value)" title="Apply % to all">
-            <option value="100">% All</option>
+            <option value="" selected>% All</option>
             ${headerOpts}
           </select>
         </div>

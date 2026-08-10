@@ -12,9 +12,13 @@ that aren't a Pokemon species (Trainers, Energy) don't match the dictionary and
 are skipped on purpose -- there's no clean English source for those.
 
 Usage:
-    python scripts/fetch_jp_cards.py
-Re-run whenever you want to refresh (new Japanese sets). The species dictionary
-is cached in scripts/jp_species.json so repeat runs don't re-hit PokeAPI.
+    python scripts/fetch_jp_cards.py           # incremental: only new sets
+    python scripts/fetch_jp_cards.py --full    # rescan every Japanese set
+
+Incremental is the default: sets already represented in cards_jp.js are skipped,
+so a routine "a new Japanese set dropped" refresh scans one set instead of ~90.
+The species dictionary is cached in scripts/jp_species.json so repeat runs don't
+re-hit PokeAPI.
 """
 import json
 import os
@@ -28,6 +32,11 @@ POKEAPI_GQL = "https://beta.pokeapi.co/graphql/v1beta"
 HERE = os.path.dirname(__file__)
 SPECIES_CACHE = os.path.join(HERE, "jp_species.json")
 OUT_PATH = os.path.join(HERE, "..", "cards_jp.js")
+# Set ids already scanned. Plenty of Japanese sets contribute zero rows (every
+# card is a Trainer/Energy, or has no species match), so "do we hold cards from
+# this set" can't tell scanned-and-empty from never-scanned -- without this they
+# would be re-downloaded on every run forever.
+SCANNED_PATH = os.path.join(HERE, "jp_scanned.json")
 
 # Regional-form prefixes: Japanese names front-load the region, English cards
 # do too ("アローラロコン" -> "Alolan Vulpix").
@@ -116,17 +125,56 @@ def translate(jp_name, species_by_len):
     return None
 
 
+def load_existing():
+    """Rows already in cards_jp.js, or [] if there's no usable file yet."""
+    if not os.path.exists(OUT_PATH):
+        return []
+    try:
+        with open(OUT_PATH, encoding="utf-8") as f:
+            m = re.search(r"const CARDS_JP\s*=\s*(\[.*\])\s*;", f.read(), re.S)
+        if not m:
+            return []
+        return [r for r in json.loads(m.group(1)) if isinstance(r, list) and len(r) >= 6]
+    except Exception as e:
+        print(f"WARNING: couldn't read {OUT_PATH} ({e}) -- rescanning everything.")
+        return []
+
+
 def main():
+    full = "--full" in sys.argv
     species = load_species_dict()
     # Match longest Japanese species names first.
     species_by_len = sorted(species.items(), key=lambda kv: len(kv[0]), reverse=True)
 
+    existing = [] if full else load_existing()
     sets = japanese_exclusive_sets()
-    print(f"{len(sets)} Japanese-exclusive sets to scan")
 
-    rows = []
-    seen = set()
+    # Skip sets we already hold cards for. TCGdex set contents are stable once
+    # published, so re-downloading them only costs time and rate limit.
+    have_sets = {r[3] for r in existing}
+    scanned = set()
+    if not full and os.path.exists(SCANNED_PATH):
+        try:
+            with open(SCANNED_PATH, encoding="utf-8") as f:
+                scanned = set(json.load(f))
+        except Exception:
+            scanned = set()
+    if not full:
+        pending = [s for s in sets
+                   if (s["id"] + " (JP)") not in have_sets and s["id"] not in scanned]
+        print(f"{len(existing)} cards already in cards_jp.js from {len(have_sets)} sets")
+        print(f"{len(sets)} Japanese-exclusive sets published, {len(pending)} new to scan")
+        if not pending:
+            print("Already up to date -- nothing to do.")
+            return
+        sets = pending
+    else:
+        print(f"Full rescan: {len(sets)} Japanese-exclusive sets")
+
+    rows = list(existing)
+    seen = {(r[0], r[1], r[3]) for r in existing}
     skipped = 0
+    before = len(rows)
     for i, s in enumerate(sets, 1):
         sid = s["id"]
         # TCGdex has no English NAME for these JP-exclusive sets (only Japanese),
@@ -163,8 +211,17 @@ def main():
             seen.add(key)
             rows.append([en_name, num, str(total), set_name, release, en_name.lower()])
             kept += 1
+        # Only sets that actually came back get marked scanned; a set that hit
+        # the retry limit `continue`s above and stays on the list for next run.
+        scanned.add(sid)
         print(f"  [{i}/{len(sets)}] {sid}: {kept} cards -> {len(rows)} total")
         time.sleep(0.2)
+
+    try:
+        with open(SCANNED_PATH, "w", encoding="utf-8") as f:
+            json.dump(sorted(scanned), f, indent=1)
+    except Exception as e:
+        print(f"  (couldn't save {SCANNED_PATH}: {e})")
 
     rows.sort(key=lambda r: r[4], reverse=True)  # newest sets first
 
@@ -176,7 +233,8 @@ def main():
         f.write("const CARDS_JP = " + json.dumps(rows, separators=(",", ":"), ensure_ascii=False) + ";\n")
 
     size_kb = os.path.getsize(OUT_PATH) / 1024
-    print(f"\nWrote {OUT_PATH} ({len(rows)} cards, {size_kb:.0f} KB; "
+    print(f"\n{len(rows) - before} new cards added ({before} -> {len(rows)}).")
+    print(f"Wrote {os.path.normpath(OUT_PATH)} ({len(rows)} cards, {size_kb:.0f} KB; "
           f"{skipped} non-Pokemon cards skipped)")
 
 
