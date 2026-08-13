@@ -607,34 +607,74 @@
     }
     .clear-all-btn:hover { background: rgba(248,113,113,0.08); }
 
-    /* ── Saved comp tabs ── */
+    /* ── Saved comp sets ── */
+    /* One set per row. A set is identified by the cards in it, so the row needs
+       the width for real card names — two to a row truncated every one of them
+       to uselessness ("Charizard e…" next to "Pikachu VM…"). */
     .saved-tabs {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
+      display: flex;
+      flex-direction: column;
       gap: 8px;
     }
     .saved-tab {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      display: block;
+      width: 100%;
+      text-align: left;
       background: var(--surface2);
-      color: var(--text2);
       border: 1px solid var(--border2);
       border-radius: var(--r-sm);
-      padding: 9px 10px;
+      padding: 10px 12px;
       font-family: inherit;
-      font-size: 12px;
-      font-weight: 500;
-      text-align: center;
       cursor: pointer;
-      transition: border-color 0.15s, color 0.15s, background 0.15s;
+      transition: border-color 0.15s, background 0.15s;
     }
     .saved-tab:hover {
       border-color: var(--purple);
-      color: var(--text);
       background: rgba(124,58,237,0.1);
     }
-    .saved-tab:last-child:nth-child(odd) { grid-column: span 2; }
+    .saved-tab:hover .st-cards { color: var(--text); }
+
+    /* The cards themselves. One line that ellipses at whatever the screen
+       allows, so the row keeps its shape from a 320px phone to a desktop and
+       the most valuable card is never the one that gets cut. */
+    .st-cards {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text2);
+      transition: color 0.15s;
+    }
+    .st-price { color: var(--purple); font-variant-numeric: tabular-nums; }
+    .st-sep   { opacity: 0.3; margin: 0 3px; }
+    .st-more  { color: var(--text3); font-weight: 500; }
+
+    .st-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 10px;
+      margin-top: 5px;
+      font-size: 11px;
+      color: var(--text3);
+    }
+    /* min-width:0 is what lets a flex child actually ellipse instead of
+       forcing the row wider than its container. */
+    .st-meta-left {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .st-total {
+      flex-shrink: 0;
+      font-weight: 700;
+      color: var(--text2);
+      font-variant-numeric: tabular-nums;
+    }
+    .st-total-label { font-weight: 500; color: var(--text3); }
 
 
     /* ── Section block ── */
@@ -1908,7 +1948,7 @@
     if (compItems.length > 0 || tradeItems.length > 0) {
       savedComps.unshift({
         id: Money.nextId(),
-        label: topCompLabel(compItems),
+        t: Date.now(),
         compItems: JSON.parse(JSON.stringify(compItems)),
         tradeItems: JSON.parse(JSON.stringify(tradeItems))
       });
@@ -1932,10 +1972,66 @@
 
   function saveSavedComps() { localStorage.setItem("savedComps", JSON.stringify(savedComps)); }
 
-  function topCompLabel(items) {
-    if (!items || items.length === 0) return "Empty Set";
-    const top = items.reduce((a, b) => (!a || b.price > a.price) ? b : a, null);
-    return top.label;
+  // How many cards a saved row names before it collapses the rest into "+N".
+  // Three is what fits a phone once prices are attached; the CSS trims from
+  // there, so a narrower screen degrades to two or one rather than wrapping.
+  const SAVED_PREVIEW_CARDS = 3;
+
+  // A saved set is identified by the cards in it, most valuable first — the
+  // same order of interest as reading the comp list itself. Derived at render
+  // time from the stored rows rather than kept as a frozen label, so a set
+  // saved by an older version still describes itself.
+  function compPreview(set) {
+    const comps = set.compItems || [];
+    // Excluded rows don't count toward the payout shown beside them, so they
+    // shouldn't headline the row either — unless they're all there is.
+    const live = comps.filter(x => !x.excluded);
+    const ranked = (live.length ? live : comps).slice()
+      .sort((a, b) => Money.toDollars(b.price) - Money.toDollars(a.price));
+    return {
+      total: comps.length,
+      excluded: comps.length - live.length,
+      shown: ranked.slice(0, SAVED_PREVIEW_CARDS),
+      hidden: Math.max(0, ranked.length - SAVED_PREVIEW_CARDS),
+      ranked
+    };
+  }
+
+  // Saved sets didn't always carry a timestamp. nextId() is Date.now() * 1000,
+  // so an older entry's id still dates it to the millisecond.
+  function savedAt(s) { return s.t || Math.floor(s.id / 1000); }
+
+  function savedTabHtml(s) {
+    const p = compPreview(s);
+    const trades = (s.tradeItems || []).length;
+    const payout = Money.computeTotals(s.compItems || [], s.tradeItems || [], headerPct).payout;
+
+    const cards = p.shown.length
+      ? p.shown
+          .map(x => `${escHtml(x.label)} <span class="st-price">$${fmtUSD(x.price)}</span>`)
+          .join('<span class="st-sep">·</span>')
+        + (p.hidden ? `<span class="st-sep">·</span><span class="st-more">+${p.hidden} more</span>` : "")
+      : `<span class="st-more">Vendor items only</span>`;
+
+    const bits = [];
+    if (p.total) bits.push(`${p.total} ${p.total === 1 ? "card" : "cards"}`
+      + (p.excluded ? `, ${p.excluded} excluded` : ""));
+    if (trades) bits.push(`${trades} vendor ${trades === 1 ? "item" : "items"}`);
+    bits.push(relTime(savedAt(s)));
+
+    // The tooltip carries the full list, so nothing trimmed from the row is
+    // actually lost — you can check before committing to reopening a set.
+    const full = p.ranked.map(x => `${x.label}  $${fmtUSD(x.price)}`).join("\n");
+
+    return `
+      <button class="saved-tab" onclick="selectSavedTab(${s.id})"
+              title="${escHtml(full || "Vendor items only")}">
+        <span class="st-cards">${cards}</span>
+        <span class="st-meta">
+          <span class="st-meta-left">${escHtml(bits.join(" · "))}</span>
+          <span class="st-total"><span class="st-total-label">payout</span> $${fmtUSD(payout)}</span>
+        </span>
+      </button>`;
   }
 
   function selectSavedTab(id) {
@@ -1966,10 +2062,7 @@
       return;
     }
 
-    const tabs = savedComps.map(s => `
-      <button class="saved-tab" onclick="selectSavedTab(${s.id})" title="Continue ${escHtml(s.label)}">
-        ${escHtml(s.label)}
-      </button>`).join("");
+    const tabs = savedComps.map(savedTabHtml).join("");
 
     section.innerHTML = `
       <hr class="divider">
