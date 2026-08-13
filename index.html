@@ -1051,24 +1051,6 @@
 
   function padTo(n, w) { return n.length >= w ? n : "0".repeat(w - n.length) + n; }
 
-  // The forms an eBay seller might plausibly have typed into a listing title.
-  // Must work in BOTH directions: typing "71/72" has to find a listing written
-  // "071/072" just as much as the reverse, so the bare form alone isn't enough.
-  // Three-wide padding is included because that's how these are commonly
-  // printed on the card ("071/072", "005/018").
-  function cardNumberVariants(n, t) {
-    const bn = String(parseInt(n, 10)), bt = String(parseInt(t, 10));
-    const forms = [
-      bn + "/" + bt,                        // 5/18   — bare
-      padTo(bn, t.length) + "/" + t,        // 05/18  — matching the typed width
-      padTo(bn, 3) + "/" + padTo(bt, 3),    // 005/018 — three-wide, as printed
-      n + "/" + t,                          // exactly as typed
-    ];
-    const seen = [];
-    forms.forEach(v => { if (seen.indexOf(v) === -1) seen.push(v); });
-    return seen.slice(0, 3);
-  }
-
   // Just the collector-number side, for the API's `number:` field.
   function numberForms(n, t) {
     const bn = String(parseInt(n, 10));
@@ -1079,21 +1061,33 @@
     return seen;
   }
 
-  // Turn "mewtwo 071/072" into "mewtwo (71/72,071/072)" — eBay's OR syntax, so
-  // a listing titled either way is found. Listings are inconsistent about
-  // padding, and searching only the typed form silently hides half the comps,
-  // which is the difference between a good quote and a bad one.
-  function expandCardNumbers(input) {
-    return input.replace(/(^|[\s(,])(\d{1,4})\/(\d{1,4})(?=$|[\s),])/g, (m, pre, n, t) => {
-      const variants = cardNumberVariants(n, t);
-      return variants.length > 1 ? pre + "(" + variants.join(",") + ")" : m;
-    });
-  }
+  // The collector number goes to eBay exactly as typed. This used to expand
+  // "72/78" into eBay's OR syntax — "(72/78,072/078)" — to catch listings that
+  // pad differently, but eBay's parenthesised OR no longer unions: measured on
+  // live search, "(72/78,072/078)" returns 239 hits where "072/078" alone
+  // returns 269, and even plain words narrow ("(charizard,charmander) v" gives
+  // 12,000 against 19,000 for "charizard v"). It was costing comps, not finding
+  // them. Padding equivalence still applies to the local catalogue via canonNum.
+  // Shorthand is spelled out, not OR'd. eBay has no working union syntax —
+  // "(nm,near mint)" returns 1 result against 68 for plain "near mint", and
+  // "nm OR near mint", "nm|near mint" and "nm,near mint" are all read as AND or
+  // ignored. Spelling it out is what makes typing the shorthand still capture
+  // both, because eBay treats NM as a synonym of "near mint": the phrase is a
+  // superset, returning all 41 listings "nm" finds plus 27 more, with no
+  // wrong-condition or graded-slab contamination in the extra ones. Same for
+  // "lp" (1 hit bare, 33 spelled out). Two are outright corrections: bare "hp"
+  // matches the card's HP stat ("220 HP") rather than condition, and eBay
+  // ignores "dmg" altogether.
+  //
+  // ETB is the known exception: neither form covers the other, since some
+  // sellers title a listing only "Crown Zenith ETB". The phrase still wins on
+  // volume (203 vs 139) and precision, at the cost of a ~13-20% blind spot that
+  // one search cannot close. Do NOT "fix" this by reintroducing OR syntax.
   const CONDITIONS = { lp:"lightly played", nm:"near mint", mp:"moderately played", hp:"heavily played", dmg:"damaged" };
-  const PRODUCTS   = { etb:"(etb,elite trainer box)", bbx:"booster box" };
+  const PRODUCTS   = { etb:"elite trainer box", bbx:"booster box" };
 
   function expandConditions(input) {
-    return input.replace(/\b(lp|nm|mp|hp|dmg)\b/gi, m => `(${m},${CONDITIONS[m.toLowerCase()]})`);
+    return input.replace(/\b(lp|nm|mp|hp|dmg)\b/gi, m => CONDITIONS[m.toLowerCase()]);
   }
   function expandProducts(input) {
     return input.replace(/\b(etb|bbx)\b/gi, m => PRODUCTS[m.toLowerCase()]);
@@ -1102,7 +1096,7 @@
     return /\b(etb|elite trainer box|booster box|bbx|sealed|collection box|tin)\b/i.test(input);
   }
   function buildUrls(input) {
-    const normalized = expandCardNumbers(expandProducts(expandConditions(normalizeCardNumber(input))));
+    const normalized = expandProducts(expandConditions(normalizeCardNumber(input)));
     const encoded    = encodeURIComponent(normalized);
     const gradedFlag = isGraded(input) ? "Yes" : "No";
     const base = isSealedProduct(input)
