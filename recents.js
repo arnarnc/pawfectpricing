@@ -480,7 +480,6 @@
   }
 
   root.Recents = {
-    MAX_ITEMS: MAX_ITEMS,
     SYNC_ITEMS: SYNC_ITEMS,
     record: record,
     match: match,
@@ -497,7 +496,6 @@
     getState: getState,
     isConfigured: isConfigured,
     startAutoSync: startAutoSync,
-    setCanon: setCanon,
-    _key: key
+    setCanon: setCanon
   };
 })(typeof window !== "undefined" ? window : globalThis);

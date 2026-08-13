@@ -276,11 +276,6 @@
       font-variant-numeric: tabular-nums;
       color: var(--purple); font-weight: 700;
     }
-    .suggestions .sug-info {
-      padding: 10px 14px; font-size: 13px; opacity: 0.55;
-      cursor: default; font-weight: 500;
-    }
-    .suggestions .sug-info:hover { background: none; }
     .suggestions .sug-src {
       display: inline-block; margin-left: 4px; padding: 0 5px;
       border-radius: 4px; font-size: 10px; font-weight: 700;
@@ -396,24 +391,6 @@
     .status-badge.raw    { background: rgba(124,58,237,0.15); color: #a78bfa; }
     .status-badge.sealed { background: rgba(74,222,128,0.15); color: #4ade80; }
 
-    .pop-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      margin-left: 8px;
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      padding: 3px 9px;
-      border-radius: 20px;
-      text-decoration: none;
-      background: rgba(56,189,248,0.15);
-      color: #38bdf8;
-      transition: background 0.1s;
-    }
-    .pop-link:hover { background: rgba(56,189,248,0.28); }
-
     /* ── Comp entry ── */
     .comp-entry { display: flex; gap: 8px; align-items: stretch; }
 
@@ -464,8 +441,6 @@
     .add-btn:active { transform: scale(0.98); }
 
     /* ── Comp list ── */
-    .comp-list-section { display: flex; flex-direction: column; gap: 12px; }
-
     .comp-table {
       width: 100%;
       border-collapse: collapse;
@@ -716,7 +691,6 @@
     .subtotal-label { font-size: 12px; font-weight: 500; color: var(--text2); }
     .subtotal-val   { font-size: 15px; font-weight: 700; }
     .subtotal-val.orange { color: #fb923c; }
-    .subtotal-val.green  { color: #4ade80; }
 
     /* ── Settlement ── */
     .settlement-result {
@@ -877,7 +851,7 @@
      without it a phone can keep running an old copy of the money rules after a
      deploy. Bump the number whenever money.js or recents.js changes. -->
 <script src="money.js?v=1"></script>
-<script src="recents.js?v=6"></script>
+<script src="recents.js?v=7"></script>
 <script src="cards.js"></script>
 <script src="cards_jp.js"></script>
 <script>
@@ -1013,26 +987,6 @@
   function isGraded(input) {
     return /\b(PSA|BGS|CGC|TAG)\s?(?:10(?:\.0)?|[1-9](?:\.[05])?)\b/i.test(input);
   }
-  // Detect the grading company and build a pop-report link for it.
-  function popReport(input) {
-    const m = input.match(/\b(PSA|BGS|CGC|TAG)\b/i);
-    if (!m) return null;
-    const grader = m[1].toUpperCase();
-    // Strip grader/grade and condition tokens to get a clean card query.
-    const query = normalizeCardNumber(input)
-      .replace(/\b(PSA|BGS|CGC|TAG)\s?(?:10(?:\.0)?|[1-9](?:\.[05])?)\b/ig, "")
-      .replace(/\b(lp|nm|mp|hp|dmg)\b/ig, "")
-      .replace(/\s+/g, " ").trim();
-    const q = encodeURIComponent(query);
-    // PSA exposes a card-search URL; the others open their pop-report page.
-    const urls = {
-      PSA: `https://www.psacard.com/pop/search?q=${q}`,
-      BGS: `https://www.beckett.com/grading/pop-report`,
-      CGC: `https://www.cgccards.com/population-report/`,
-      TAG: `https://my.taggrading.com/pop-report`
-    };
-    return { grader, url: urls[grader] };
-  }
   function normalizeCardNumber(input) {
     return input.replace(/(\d+)\s+(\d+)(?=\s|$)/, "$1/$2");
   }
@@ -1137,9 +1091,7 @@
     if (isSealedProduct(value)) {
       statusEl.innerHTML = '<span class="status-badge sealed">📦 Sealed</span>';
     } else if (isGraded(value)) {
-      const pop = popReport(value);
-      statusEl.innerHTML = '<span class="status-badge graded">⚡ Graded Card</span>'
-        + (pop ? `<a class="pop-link" href="${pop.url}" target="_blank" rel="noopener">📊 ${pop.grader} Pop</a>` : "");
+      statusEl.innerHTML = '<span class="status-badge graded">⚡ Graded Card</span>';
     } else {
       statusEl.innerHTML = '<span class="status-badge raw">🃏 Raw Card</span>';
     }
@@ -1556,11 +1508,11 @@
     div.innerHTML = r.src === "recent"
       // A recent row replays the exact query that was searched (graders and
       // conditions included), so its meta line is "when", not "which set".
-      ? `<span class="sug-name">${escapeHtml(r.name)}</span>`
-        + `<span class="sug-meta"><span class="sug-src recent">↺ recent</span> ${escapeHtml(relTime(r.t))}</span>`
-      : `<span class="sug-name">${escapeHtml(r.name)}</span>`
-      + `<span class="sug-meta"><span class="sug-num">${escapeHtml(r.num)}</span>`
-      + (r.set ? ` · ${escapeHtml(r.set)}` : "")
+      ? `<span class="sug-name">${escHtml(r.name)}</span>`
+        + `<span class="sug-meta"><span class="sug-src recent">↺ recent</span> ${escHtml(relTime(r.t))}</span>`
+      : `<span class="sug-name">${escHtml(r.name)}</span>`
+      + `<span class="sug-meta"><span class="sug-num">${escHtml(r.num)}</span>`
+      + (r.set ? ` · ${escHtml(r.set)}` : "")
       + (r.src === "intl" ? ` <span class="sug-src">intl</span>` : "")
       + `</span>`;
     div.onmousedown = e => e.preventDefault();
@@ -1755,8 +1707,11 @@
       .catch(() => null);
   }
 
-  function escapeHtml(s) {
-    return s.replace(/[&<>"']/g, c =>
+  // The one HTML escaper. There used to be two near-identical ones that
+  // disagreed about the apostrophe, which is the kind of difference that only
+  // shows up the day something is interpolated into a single-quoted attribute.
+  function escHtml(s) {
+    return String(s).replace(/[&<>"']/g, c =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
@@ -1854,15 +1809,25 @@
   // normalizeItems pulls anything saved before the whole-dollar rule (which
   // could hold cents) onto integers, so an old list totals what it displays.
   let compItems = Money.normalizeItems(JSON.parse(localStorage.getItem("compItems") || "[]"));
-  let headerPct = 80;
 
-  function escHtml(s) {
-    return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  // The payout rate has to survive a reload. It used to reset to 80 while the
+  // saved rows kept the rate that was actually applied, so the next card added
+  // to an in-progress comp was quoted at 80% next to rows at 60% -- a silent
+  // over-quote in the middle of a negotiation, on a phone that only had to drop
+  // the tab from memory to cause it. The saved rows are the truth; fall back to
+  // the last rate chosen on this device, then to the default.
+  let headerPct = compItems.length
+    ? Money.toPct(compItems[0].pct, 80)
+    : Money.toPct(localStorage.getItem("headerPct"), 80);
+
+  function setHeaderPct(v) {
+    headerPct = Money.toPct(v, headerPct);
+    localStorage.setItem("headerPct", headerPct);
   }
+
   // All money handling lives in money.js (whole dollars, no cents anywhere) so
   // it can be exercised by tests.html. These are thin delegates.
   const fmtUSD   = Money.fmtMoney;
-  const fmtInt   = Money.fmtMoney;
   const cleanNum = Money.toDollars;
 
   // While typing: keep the caret sane and don't destroy a half-typed "12.".
@@ -1919,7 +1884,7 @@
       renderComp();
       return;
     }
-    headerPct = newPct;
+    setHeaderPct(newPct);
     compItems.forEach(x => x.pct = headerPct);
     saveComp();
     renderComp();
@@ -1978,7 +1943,7 @@
     if (!set) return;
     compItems  = Money.normalizeItems(JSON.parse(JSON.stringify(set.compItems)));
     tradeItems = Money.normalizeItems(JSON.parse(JSON.stringify(set.tradeItems)));
-    headerPct  = compItems.length ? Money.toPct(compItems[0].pct, 100) : headerPct;
+    if (compItems.length) setHeaderPct(compItems[0].pct);
     savedComps = savedComps.filter(s => s.id !== id);
     saveComp();
     saveTrade();
@@ -2065,7 +2030,7 @@
           <span class="price-cell">
             <span class="price-cell-dollar">$</span>
             <input class="comp-price-input trade-price-input" type="text" inputmode="numeric"
-              value="${item.price > 0 ? fmtInt(item.price) : ''}"
+              value="${item.price > 0 ? fmtUSD(item.price) : ''}"
               placeholder="0"
               onfocus="this.select()"
               oninput="formatPriceInput(this); updateTradeField(${item.id},'price',this.value)"
@@ -2103,7 +2068,7 @@
           <span class="price-cell">
             <span class="price-cell-dollar">$</span>
             <input class="comp-price-input" type="text" inputmode="numeric"
-              value="${item.price > 0 ? fmtInt(item.price) : ''}"
+              value="${item.price > 0 ? fmtUSD(item.price) : ''}"
               placeholder="0"
               oninput="formatPriceInput(this); updateCompField(${item.id},'price',this.value)"
               onchange="commitPriceInput(this); updateCompField(${item.id},'price',this.value)"
@@ -2196,7 +2161,8 @@
     renderSavedTabs();
   }
 
-  window.onload = () => { renderComp(); renderSavedTabs(); };
+  // renderComp() paints the saved tabs itself, on both its paths.
+  window.onload = renderComp;
 </script>
 </body>
 </html>
