@@ -607,6 +607,29 @@
     }
     .clear-all-btn:hover { background: rgba(248,113,113,0.08); }
 
+    /* Two ways to finish a comp, weighted by how often each is the right one.
+       Saving is the normal exit and takes the width; closing without saving is
+       the exception, so it reads as the quieter option — the confirm dialog,
+       not the styling, is what guards it. */
+    .finish-row { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; }
+    .discard-btn {
+      background: transparent;
+      color: var(--text3);
+      border: 1px solid var(--border2);
+      padding: 10px;
+      border-radius: var(--r);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .discard-btn:hover {
+      background: var(--surface2);
+      color: var(--text2);
+      border-color: var(--border);
+    }
+
     /* ── Saved comp sets ── */
     /* One set per row. A set is identified by the cards in it, so the row needs
        the width for real card names — two to a row truncated every one of them
@@ -2045,6 +2068,31 @@
     renderComp();
   }
 
+  // Empty the active editor. Both ways of finishing a comp end here; what
+  // differs is only whether the set was filed away first.
+  function clearActiveComp() {
+    compItems = [];
+    tradeItems = [];
+    saveComp();
+    saveTrade();
+    renderComp();
+  }
+
+  // The other way out of a comp: a customer who walked, a list started on the
+  // wrong card, a quote nobody needs a record of. Save & Clear files the set
+  // and everything it takes is recoverable from Recent Comp Sets; this throws
+  // it away for good, so it asks first and names exactly what goes. Saved sets
+  // are never touched — this closes the comp in hand, nothing else.
+  function closeCompWithoutSaving() {
+    const cards = compItems.length, vendor = tradeItems.length;
+    if (!cards && !vendor) return;
+    const parts = [];
+    if (cards)  parts.push(`${cards} ${cards === 1 ? "card" : "cards"}`);
+    if (vendor) parts.push(`${vendor} vendor ${vendor === 1 ? "item" : "items"}`);
+    if (!confirm(`Close without saving? ${parts.join(" and ")} will be lost, and this cannot be undone.`)) return;
+    clearActiveComp();
+  }
+
   function saveAndClearComp() {
     if (compItems.length > 0 || tradeItems.length > 0) {
       savedComps.unshift({
@@ -2058,20 +2106,40 @@
       savedComps.length = Math.min(savedComps.length, MAX_SAVED_COMPS);
       saveSavedComps();
     }
-    compItems = [];
-    tradeItems = [];
-    saveComp();
-    saveTrade();
-    renderComp();
+    clearActiveComp();
   }
 
-  // ── Saved comp sets (queue of last 5, surfaced as tabs) ──
-  // Selecting a tab loads that set straight into the active editor — pre-filled
-  // and fully editable (add/remove items) — same as starting a new comp.
-  const MAX_SAVED_COMPS = 10;
+  // ── Saved comp sets ──────────────────────────────────────
+  // Selecting a set loads it straight into the active editor — pre-filled and
+  // fully editable (add/remove items) — same as starting a new comp.
+  //
+  // Two different limits, because browsing and looking something up want
+  // opposite things. The list you scroll is the last SHOWN sets: a screenful
+  // of "what was I just doing", where a longer list is worse, not better.
+  // Behind it, MAX sets are kept and every one of them is reachable by
+  // searching — that is where "what did I pay for this in March" gets
+  // answered, and there a longer history is strictly better.
+  const MAX_SAVED_COMPS = 100;    // kept on the device, all of them searchable
+  const SAVED_TABS_SHOWN = 10;    // listed without searching
   let savedComps = JSON.parse(localStorage.getItem("savedComps") || "[]").slice(0, MAX_SAVED_COMPS);
 
-  function saveSavedComps() { localStorage.setItem("savedComps", JSON.stringify(savedComps)); }
+  // Ten times the history means ten times the chance of hitting the storage
+  // quota, so the write can no longer be assumed to succeed. The oldest sets
+  // are the most disposable thing in here, so shed them rather than let the
+  // write fail and lose the set that was just saved.
+  function saveSavedComps() {
+    let list = savedComps;
+    for (;;) {
+      try {
+        localStorage.setItem("savedComps", JSON.stringify(list));
+        savedComps = list;
+        return;
+      } catch (e) {
+        if (list.length <= 1) return;   // can't shrink further; keep what's in memory
+        list = list.slice(0, Math.floor(list.length / 2));
+      }
+    }
+  }
 
   // How many cards a saved row names before it collapses the rest into "+N".
   // Three is what fits a phone once prices are attached; the CSS trims from
@@ -2150,7 +2218,10 @@
 
   function clearSavedComps() {
     if (savedComps.length === 0) return;
-    if (!confirm("Clear all recent comp sets? This cannot be undone.")) return;
+    // Names the real count, because most of them are behind the visible window
+    // now — "clear all" from a screen showing ten must not quietly bin ninety.
+    const n = savedComps.length;
+    if (!confirm(`Clear all ${n} saved comp ${n === 1 ? "set" : "sets"}? This cannot be undone.`)) return;
     savedComps = [];
     saveSavedComps();
     renderSavedTabs();
@@ -2189,12 +2260,22 @@
     if (e.key === "Escape") { e.preventDefault(); clearSavedSearch(); }
   }
 
-  // Empty query = the plain list of sets, i.e. exactly what was here before the
-  // search box existed. Searching is an overlay on that, never a replacement.
+  // Empty query = the plain list of the most recent sets. Searching is an
+  // overlay on that, never a replacement — and it is the ONLY way to reach the
+  // sets held behind the visible window, so when there are some, the list says
+  // so rather than letting them look deleted.
   function savedListHtml() {
     const q = savedQuery.trim();
-    if (!q) return savedComps.map(savedTabHtml).join("");
+    if (!q) {
+      const shown = savedComps.slice(0, SAVED_TABS_SHOWN);
+      const hidden = savedComps.length - shown.length;
+      return shown.map(savedTabHtml).join("")
+        + (hidden ? `<div class="saved-note">${hidden} older ${hidden === 1 ? "set is" : "sets are"} `
+            + `still saved — search above to reach ${hidden === 1 ? "it" : "them"}.</div>` : "");
+    }
 
+    // Searches everything kept, not just what is listed above: reaching the
+    // older sets is the entire reason they are still here.
     const res = CompSearch.search(savedComps, q, SAVED_SEARCH_LIMIT);
     if (!res.rows.length) {
       return `<div class="saved-note">No comped card matches “${escHtml(q)}”.</div>`;
@@ -2247,7 +2328,7 @@
       <div class="section-block">
         <div class="block-hdr">
           <span class="section-label">Recent Comp Sets</span>
-          <button class="icon-add-btn" onclick="clearSavedComps()" title="Clear all recent comp sets">×</button>
+          <button class="icon-add-btn" onclick="clearSavedComps()" title="Clear every saved comp set">×</button>
         </div>
         <div class="saved-search">
           <input type="text" id="savedSearchInput" placeholder="Search a card in these sets…"
@@ -2433,7 +2514,12 @@
         <span class="r-val">${settlementVal}</span>
       </div>
 
-      <button class="clear-all-btn" onclick="saveAndClearComp()">Save &amp; Clear</button>`;
+      <div class="finish-row">
+        <button class="clear-all-btn" onclick="saveAndClearComp()"
+                title="File this comp under Recent Comp Sets and start fresh">Save &amp; Clear</button>
+        <button class="discard-btn" onclick="closeCompWithoutSaving()"
+                title="Clear the comp list without saving it">Close</button>
+      </div>`;
 
     renderSavedTabs();
   }

@@ -165,6 +165,21 @@
   eq(r.rows[0].price, 30, "the cap keeps the most valuable, not an arbitrary five");
   eq(C.search(many, "charizard").rows.length, C.LIMIT, "with no cap given it falls back to the module default");
 
+  group("Search reaches the history behind the visible list");
+  {
+    // The app lists only the ten most recent sets. Every other set kept on the
+    // device is reachable ONLY through this search, so a deep hit has to come
+    // back — otherwise those sets may as well have been deleted.
+    const deep = Array.from({length: 100}, (_, i) =>
+      set(1000 - i, i, [ comp("Filler " + i, 10, 80) ]));
+    deep[87].compItems.push(comp("Moonbreon 215/203", 1400, 70));
+    r = C.search(deep, "moonbreon");
+    eq(r.matched, 1, "a card in the 88th set — far past the ten listed — is still found");
+    eq(r.rows[0].price, 1400, "with the price it was comped at");
+    eq(r.rows[0].setId, 1000 - 87, "and the id needed to open that set");
+    eq(C.search(deep, "filler").matched, 100, "a term in every set matches across the whole history");
+  }
+
   // ── Hostile input ──────────────────────────────────────────
   group("Junk input can't throw");
   eq(C.search(SETS(), "").rows.length, 0, "an empty query returns nothing (not everything)");
@@ -243,6 +258,27 @@
       ok(/id="worldwideAvailLink"/.test(src) && />Available</.test(src), "the button reads 'Available'");
       ok(!/>Cheapest</.test(src), "no 'Cheapest' label is left behind");
       ok(/document\.getElementById\("worldwideAvailLink"\)/.test(src), "and the renamed link is the one the app updates");
+
+      group("Saved sets — kept deep, listed shallow");
+      const maxKept = /const MAX_SAVED_COMPS = (\d+)/.exec(src) || [];
+      const shown   = /const SAVED_TABS_SHOWN = (\d+)/.exec(src) || [];
+      eq(maxKept[1], "100", "100 sets are kept on the device");
+      eq(shown[1], "10", "10 are listed without searching");
+      ok(Number(maxKept[1]) > Number(shown[1]), "the history is deeper than the list, which is the point");
+      ok(/savedComps\.slice\(0, SAVED_TABS_SHOWN\)/.test(src), "the plain list is cut to the shown window");
+      ok(/CompSearch\.search\(savedComps,/.test(src),
+         "but the search is handed the WHOLE history — a set past the window must stay reachable");
+      ok(/Math\.min\(savedComps\.length, MAX_SAVED_COMPS\)/.test(src), "saving trims to the kept limit, not the shown one");
+
+      group("Closing a comp without saving");
+      ok(/function closeCompWithoutSaving\(\)/.test(src), "there is a second way out of a comp");
+      const close = (/function closeCompWithoutSaving\(\)\s*\{[\s\S]*?\n  \}/.exec(src) || [""])[0];
+      ok(/confirm\(/.test(close), "it confirms first — the data it drops is not recoverable");
+      ok(/clearActiveComp\(\)/.test(close), "and empties the active comp through the shared exit");
+      ok(!/savedComps/.test(close), "it never touches the saved sets — it closes the comp in hand, nothing else");
+      ok(!/savedComps\.unshift/.test(close), "and specifically does not file the set it is discarding");
+      ok(/onclick="closeCompWithoutSaving\(\)"/.test(src) && /onclick="saveAndClearComp\(\)"/.test(src),
+         "both exits are on screen together");
     } catch (e) {
       ok(false, "could not read index.html (serve this page over http, not file://)", String(e));
     }
