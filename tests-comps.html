@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pawfect Pricing · comp search tests</title>
+  <style>
+    body { font-family: ui-monospace, Menlo, Consolas, monospace; background:#09090b; color:#fafafa; padding:24px; line-height:1.5; }
+    h1 { font-size:18px; margin-bottom:4px; }
+    h2 { font-size:13px; margin:20px 0 6px; color:#a1a1aa; text-transform:uppercase; letter-spacing:.08em; }
+    .sum { font-size:15px; font-weight:700; padding:10px 14px; border-radius:8px; margin:12px 0 4px; }
+    .sum.pass { background:rgba(74,222,128,.12); color:#4ade80; }
+    .sum.fail { background:rgba(248,113,113,.12); color:#f87171; }
+    .t { font-size:12px; padding:2px 0; }
+    .t.pass::before { content:"PASS  "; color:#4ade80; }
+    .t.fail::before { content:"FAIL  "; color:#f87171; }
+    .t.fail { color:#fca5a5; }
+    .why { color:#71717a; padding-left:52px; font-size:11px; }
+    .calls { color:#a78bfa; padding-left:52px; font-size:11px; }
+  </style>
+</head>
+<body>
+  <h1>Saved-comp search tests</h1>
+  <p class="why" style="padding-left:0">Open this file in a browser. These cover compsearch.js — the card-level search over
+     the saved comp sets — plus a guard on the eBay search URLs built in index.html.
+     The load-bearing assertions are the last group: searching must never alter a saved set or
+     what it is worth. Run this after touching compsearch.js, money.js, or buildUrls().</p>
+  <div id="out"></div>
+
+<!-- Cache-busted on purpose: a test page must never assert against a stale
+     copy of the files it is testing. money.js first — compsearch.js parses
+     every price through it. -->
+<script>document.write('<script src="money.js?t=' + Date.now() + '"><\/script>');</script>
+<script>document.write('<script src="compsearch.js?t=' + Date.now() + '"><\/script>');</script>
+<script>
+  const out = document.getElementById("out");
+  let passed = 0, failed = 0;
+  const summary = document.createElement("div");
+  out.appendChild(summary);
+
+  function group(n){ const h=document.createElement("h2"); h.textContent=n; out.appendChild(h); }
+  function ok(c,l,w){ const d=document.createElement("div"); d.className="t "+(c?"pass":"fail"); d.textContent=l; out.appendChild(d);
+    if(!c&&w){ const x=document.createElement("div"); x.className="why"; x.textContent=w; out.appendChild(x);} c?passed++:failed++; }
+  function eq(a,e,l){ ok(JSON.stringify(a)===JSON.stringify(e), l, `expected ${JSON.stringify(e)}, got ${JSON.stringify(a)}`); }
+  function note(text){ const d=document.createElement("div"); d.className="calls"; d.textContent=text; out.appendChild(d); }
+
+  const C = CompSearch;
+
+  // ── Fixtures ───────────────────────────────────────────────
+  // Shaped exactly like what index.html writes to localStorage under
+  // "savedComps": newest set first, each holding the customer's cards
+  // (compItems) and the vendor's items (tradeItems).
+  const HOUR = 3600000;
+  let nextFixtureId = 1000;
+  const comp  = (label, price, pct, excluded) => ({ id: nextFixtureId++, label, price, pct, excluded: !!excluded });
+  const trade = (name, price) => ({ id: nextFixtureId++, name, price });
+  const set   = (id, ageH, compItems, tradeItems) =>
+    ({ id, t: Date.now() - ageH * HOUR, compItems, tradeItems: tradeItems || [] });
+
+  // Three past negotiations. The Charizard appears in two of them at different
+  // prices and rates — that repeat is the whole reason this search exists.
+  const SETS = () => [
+    set(3, 1, [                                   // newest
+      comp("Charizard 125/094 nm", 250, 80),
+      comp("Umbreon VMAX 215/203", 900, 75),
+      comp("Pikachu 20/200", 12, 80),
+    ], [ trade("Charizard 125/094 sealed lot", 400) ]),
+    set(2, 30, [                                  // yesterday
+      comp("Charizard ex 054/091", 40, 70),
+      comp("Mew 151/165", 60, 70, true),          // excluded from the payout
+    ]),
+    set(1, 200, [                                 // last week
+      comp("Charizard 125/094 lp", 180, 60),
+      comp("Lugia 139/195", 75, 60),
+    ]),
+  ];
+  const names = r => r.rows.map(x => x.label);
+
+  // The app injects index.html's canonNum so "125/094" and "125/94" are the
+  // same card everywhere. Everything below the "collector numbers" group runs
+  // with it installed, matching production; the group above it checks the
+  // standalone fallback, which is what a bare copy of the module does.
+  const canonNum = s => String(s == null ? "" : s).toLowerCase().replace(/(^|[^0-9])0+(\d)/g, "$1$2");
+
+  // ── Matching ───────────────────────────────────────────────
+  group("Standalone (no canonicaliser injected)");
+  eq(C.terms("  Charizard   125/094 "), ["charizard","125/094"], "the query splits on whitespace and lowercases");
+  eq(C.terms(""), [], "an empty query has no terms");
+  eq(C.terms("   "), [], "whitespace only has no terms");
+  ok(C.matches("Charizard 125/094 nm", "charizard"), "case-insensitive name match");
+  ok(!C.matches("Charizard 125/094 nm", "125/94"), "without the canonicaliser, padding is NOT equivalent");
+
+  group("Collector numbers are canonicalised the same way as everywhere else");
+  C.setCanon(canonNum);
+  ok(C.matches("Charizard 125/094 nm", "125/94"), `typing "125/94" finds a card saved as "125/094"`);
+  // Both sides go through the canonicaliser. Doing only one would make the
+  // equivalence work in one direction and not the other, which is the kind of
+  // half-fix that looks correct until the day the padding lands the other way.
+  ok(C.matches("Charizard 125/94 nm", "125/094"), "and the reverse — padding is not part of the number");
+  ok(C.matches("Charizard 125/94 nm", C.terms("125/094")), "a pre-split term list works the same way");
+  ok(C.matches("Umbreon VMAX 215/203", "vmax"), "matching is case-insensitive both ways");
+
+  group("Every typed word has to be there (AND, not OR)");
+  let r = C.search(SETS(), "charizard");
+  eq(names(r), ["Charizard 125/094 nm","Charizard ex 054/091","Charizard 125/094 lp"], "one word finds every Charizard");
+  r = C.search(SETS(), "charizard ex");
+  eq(names(r), ["Charizard ex 054/091"], "adding a word narrows, never widens");
+  r = C.search(SETS(), "charizard pikachu");
+  eq(names(r), [], "two words that never co-occur match nothing");
+  r = C.search(SETS(), "125/94");
+  eq(names(r), ["Charizard 125/094 nm","Charizard 125/094 lp"], "a bare collector number finds the card across sets");
+  r = C.search(SETS(), "zard");
+  eq(r.matched, 3, "a mid-word fragment matches — comp labels are free text, not a fixed format");
+
+  // ── The answer ─────────────────────────────────────────────
+  group("A hit reports what you comped it at");
+  r = C.search(SETS(), "charizard 125/94");
+  eq(r.rows.map(x => [x.label, x.price, x.pct]),
+     [["Charizard 125/094 nm",250,80],["Charizard 125/094 lp",180,60]],
+     "the same card in two sets comes back with each set's own price AND rate");
+  eq(r.rows[0].setId, 3, "each row carries the id of the set it came from, so a click can open it");
+  {
+    const sets = SETS();
+    const hit = C.search(sets, "umbreon").rows[0];
+    ok(hit.set === sets[0], "and a reference to the set itself, for the row's summary line");
+  }
+  eq(r.matched, 2, "matched counts the cards");
+  eq(r.sets, 2, "sets counts the distinct sets they came from");
+  eq(r.truncated, 0, "nothing was cut");
+
+  group("Prices and rates come back through the money rules");
+  // Legacy sets could hold decimals or strings; the search must show exactly
+  // what computeTotals would use, or a row would disagree with its own total.
+  const legacy = [ set(9, 1, [ comp("Charizard 125/094", "1,250.75", "0"), comp("Gengar 94/151", 12.4) ]) ];
+  r = C.search(legacy, "charizard");
+  eq(r.rows[0].price, 1251, `a stored "1,250.75" reads as the whole dollar 1251, same as the totals`);
+  eq(r.rows[0].pct, 0, "a real 0% rate survives (it must never read as 100%)");
+  r = C.search(legacy, "gengar");
+  eq(r.rows[0].price, 12, "a legacy decimal price rounds the same way the row does");
+  eq(r.rows[0].pct, 100, "a missing rate defaults to 100, matching computeTotals");
+
+  group("Excluded rows are found, and flagged");
+  r = C.search(SETS(), "mew");
+  eq(r.matched, 1, "an excluded card is still findable — it is in the set, and you looked it up");
+  ok(r.rows[0].excluded, "and it is marked, so the list can show it isn't in the payout");
+
+  group("Only the customer's cards are searched");
+  r = C.search(SETS(), "sealed lot");
+  eq(names(r), [], "a vendor item is not a comp — it has no comped price or rate to report");
+
+  // ── Ordering and limits ────────────────────────────────────
+  group("Order: newest set first, most valuable card first");
+  r = C.search(SETS(), "a");   // a letter in every card name here
+  eq(r.matched, 6, "the fixture has six cards with an 'a' in them, across all three sets");
+  eq(r.rows.filter(x => x.setId === 3).map(x => x.price), [900, 250, 12], "within a set, most expensive first");
+  const setSeq = [];
+  r.rows.forEach(x => { if (setSeq[setSeq.length-1] !== x.setId) setSeq.push(x.setId); });
+  eq(setSeq, [3, 2, 1], "sets stay in their stored order — newest first — and are not interleaved");
+
+  group("Results are capped, and say so");
+  const many = [ set(1, 1, Array.from({length: 30}, (_, i) => comp("Charizard #" + i, i + 1, 80))) ];
+  r = C.search(many, "charizard", 5);
+  eq(r.rows.length, 5, "the cap is honoured");
+  eq(r.matched, 30, "but the true match count is still reported");
+  eq(r.truncated, 25, "and so is how many were cut");
+  eq(r.rows[0].price, 30, "the cap keeps the most valuable, not an arbitrary five");
+  eq(C.search(many, "charizard").rows.length, C.LIMIT, "with no cap given it falls back to the module default");
+
+  // ── Hostile input ──────────────────────────────────────────
+  group("Junk input can't throw");
+  eq(C.search(SETS(), "").rows.length, 0, "an empty query returns nothing (not everything)");
+  eq(C.search(SETS(), "   ").rows.length, 0, "whitespace returns nothing");
+  eq(C.search(SETS(), null).rows.length, 0, "null query is safe");
+  eq(C.search(null, "charizard").rows.length, 0, "null sets are safe");
+  eq(C.search([], "charizard").rows.length, 0, "no saved sets is safe");
+  eq(C.search([null, undefined], "charizard").rows.length, 0, "a corrupt entry in the list is skipped");
+  eq(C.search([{ id: 1 }], "charizard").rows.length, 0, "a set with no compItems is skipped");
+  eq(C.search([{ id: 1, compItems: [null, { }] }], "charizard").rows.length, 0, "a corrupt row is skipped");
+  eq(C.search([{ id: 1, compItems: [{ label: null, price: 5 }] }], "charizard").rows.length, 0, "a row with no label is skipped");
+  eq(C.search(SETS(), "<img src=x>").rows.length, 0, "markup in the query is just text that matches nothing");
+
+  // ── The one that matters ───────────────────────────────────
+  group("Searching NEVER changes a saved set, or what it is worth");
+  {
+    const sets = SETS();
+    const before = JSON.stringify(sets);
+    const worthBefore = sets.map(s => Money.computeTotals(s.compItems, s.tradeItems, 80));
+    ["charizard", "125/94", "", "mew", "a", "charizard 125/94 nm"].forEach(q => C.search(sets, q));
+    eq(JSON.stringify(sets), before, "six searches leave the stored sets byte-for-byte identical");
+    const worthAfter = sets.map(s => Money.computeTotals(s.compItems, s.tradeItems, 80));
+    eq(worthAfter, worthBefore, "and every set's market, payout and settlement are unchanged");
+  }
+  {
+    // The sort inside search() runs on its own array of hits. If it ever sorted
+    // the set's own rows, the comp list would silently reorder itself — and the
+    // row a price was typed into would move out from under the finger.
+    const sets = SETS();
+    const labels = sets[0].compItems.map(x => x.label);
+    C.search(sets, "charizard");
+    C.search(sets, "1");
+    eq(sets[0].compItems.map(x => x.label), labels, "the set's own row order is untouched by the price sort");
+  }
+  {
+    // Rows are copies, not references into the set. If a renderer ever wrote to
+    // a returned row, it must not reach the saved data.
+    const sets = SETS();
+    const row = C.search(sets, "umbreon").rows[0];
+    row.price = 1;
+    row.label = "mutated";
+    row.excluded = true;
+    eq(sets[0].compItems[1].price, 900, "writing to a returned row does not touch the stored price");
+    eq(sets[0].compItems[1].label, "Umbreon VMAX 215/203", "nor the stored label");
+    eq(Money.computeTotals(sets[0].compItems, sets[0].tradeItems, 80).payout, 885,
+       "and the set still pays out exactly what it did (200 + 675 + 9.6, rounded once on the sum)");
+  }
+
+  // ── eBay search URLs ───────────────────────────────────────
+  // buildUrls() lives inline in index.html and can't be imported, so this reads
+  // the source and asserts on the templates themselves. Coarser than calling
+  // the function, but it is what stops the active search silently going back to
+  // sorting by price.
+  (async function urlGuard(){
+    group("eBay URLs — 'Available' ranks by best match, not lowest price");
+    try {
+      const src = await fetch("index.html?t=" + Date.now()).then(r => r.text());
+      const grab = k => (new RegExp(k + ":\\s*`([^`]+)`").exec(src) || [])[1] || "";
+      const sortCodes = /const SORT = \{ RECENT: (\d+), BEST_MATCH: (\d+) \}/.exec(src) || [];
+      const avail = grab("worldwideAvail");
+      const sold  = grab("worldwideSold");
+      const au    = grab("auSold");
+      note("available: " + (avail || "(not found)"));
+
+      ok(!!avail, "the active-listing URL is still built");
+      eq(sortCodes[2], "12", "BEST_MATCH is eBay's best-match code (12)");
+      eq(sortCodes[1], "13", "RECENT is eBay's newly-listed code (13)");
+      ok(/_sop=\$\{SORT\.BEST_MATCH\}/.test(avail), "Available sorts by best match");
+      ok(!/_sop=15/.test(avail), "and no longer forces price+shipping lowest first");
+      ok(/LH_BIN=1/.test(avail), "it still shows only what can be bought right now");
+      ok(!/LH_Sold=1/.test(avail), "it is still an active search, not a sold search");
+
+      ok(/LH_Sold=1&LH_Complete=1/.test(sold) && /_sop=\$\{SORT\.RECENT\}/.test(sold),
+         "Global Sold is untouched: completed sales, most recent first");
+      ok(/LH_PrefLoc=1/.test(au) && /LH_Sold=1/.test(au), "AU Sold is untouched: local completed sales");
+      ok(/id="worldwideAvailLink"/.test(src) && />Available</.test(src), "the button reads 'Available'");
+      ok(!/>Cheapest</.test(src), "no 'Cheapest' label is left behind");
+      ok(/document\.getElementById\("worldwideAvailLink"\)/.test(src), "and the renamed link is the one the app updates");
+    } catch (e) {
+      ok(false, "could not read index.html (serve this page over http, not file://)", String(e));
+    }
+
+    summary.className = "sum " + (failed ? "fail" : "pass");
+    summary.textContent = failed ? `${failed} FAILED, ${passed} passed` : `All ${passed} assertions passed`;
+    document.title = (failed ? `${failed} FAILED · ` : "PASS · ") + "comp search tests";
+    window.__testResult = { passed, failed };
+  })();
+</script>
+</body>
+</html>

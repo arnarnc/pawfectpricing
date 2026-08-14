@@ -676,6 +676,65 @@
     }
     .st-total-label { font-weight: 500; color: var(--text3); }
 
+    /* Search across the saved sets. Sized down from the main card box on
+       purpose: this is a filter over what is already on screen, not the
+       app's primary input, and it must not compete with it. */
+    .saved-search { position: relative; }
+    .saved-search input[type="text"] {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      color: var(--text);
+      padding: 9px 34px 9px 12px;
+      font-size: 13px;
+      font-family: inherit;
+      font-weight: 500;
+      border-radius: var(--r-sm);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .saved-search input[type="text"]:focus { border-color: var(--purple); }
+    .saved-search input[type="text"]::placeholder { color: var(--text3); font-weight: 400; }
+    .saved-search .clear-btn { right: 7px; width: 20px; height: 20px; font-size: 13px; }
+
+    /* A matched card. Deliberately the same shell as a set row, because it
+       opens the same thing — what changes is which line you read to recognise
+       it: the card and what you comped it at, instead of the set's contents. */
+    .st-hit {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .st-hit-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text2);
+      transition: color 0.15s;
+    }
+    .saved-tab:hover .st-hit-name { color: var(--text); }
+    .st-hit-money {
+      flex-shrink: 0;
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--purple);
+      font-variant-numeric: tabular-nums;
+    }
+    .st-hit-pct { color: var(--text3); font-weight: 600; }
+    /* Struck through for the same reason it is struck through in the comp
+       table: that row is in the set but not in its payout. */
+    .saved-tab.excluded .st-hit-name { text-decoration: line-through; opacity: 0.65; }
+
+    .saved-note {
+      font-size: 11px;
+      color: var(--text3);
+      padding: 1px 2px;
+    }
+
 
     /* ── Section block ── */
     .section-block { display: flex; flex-direction: column; gap: 12px; }
@@ -889,9 +948,10 @@
 
 <!-- ?v= is a cache buster. GitHub Pages serves these with a 10-minute cache, so
      without it a phone can keep running an old copy of the money rules after a
-     deploy. Bump the number whenever money.js or recents.js changes. -->
+     deploy. Bump the number on any of these whenever that file changes. -->
 <script src="money.js?v=1"></script>
 <script src="recents.js?v=7"></script>
+<script src="compsearch.js?v=1"></script>
 <script src="cards.js"></script>
 <script src="cards_jp.js"></script>
 <script>
@@ -906,8 +966,9 @@
   let excludeAuctions = localStorage.getItem("excludeAuctions") === "true";
   document.addEventListener("DOMContentLoaded", () => {
     // Before anything can match: one definition of collector-number equality,
-    // shared with the recents matcher.
+    // shared with the recents matcher and the saved-comp search.
     Recents.setCanon(canonNum);
+    CompSearch.setCanon(canonNum);
     document.getElementById("excludeAuctions").checked = excludeAuctions;
     applyDesktopMode();
     // Restore the last typed card so a refresh doesn't lose it.
@@ -2095,14 +2156,91 @@
     renderSavedTabs();
   }
 
+  // ── Searching the saved sets ──────────────────────────────
+  // A stack of past comps gets asked a card-level question — "what did I comp
+  // this at last time?" — so typing here filters to the matching CARDS, each
+  // showing the price and rate it was comped at. Clicking one opens the set it
+  // belongs to, through the same selectSavedTab() a set row uses: the search
+  // is a way of finding a set, and changes nothing about how one is restored
+  // or totalled.
+  //
+  // The matching itself lives in compsearch.js so it can be tested.
+  const SAVED_SEARCH_LIMIT = 20;
+  let savedQuery = "";
+
+  function onSavedSearch(v) {
+    savedQuery = String(v == null ? "" : v);
+    // Repaint ONLY the list. Rewriting the whole section would rebuild the
+    // input element too, and typing would lose focus and the caret on every
+    // single keystroke.
+    const list = document.getElementById("savedTabsList");
+    if (list) list.innerHTML = savedListHtml();
+  }
+
+  function clearSavedSearch() {
+    savedQuery = "";
+    const inp = document.getElementById("savedSearchInput");
+    if (inp) { inp.value = ""; inp.focus(); }
+    const list = document.getElementById("savedTabsList");
+    if (list) list.innerHTML = savedListHtml();
+  }
+
+  function onSavedSearchKey(e) {
+    if (e.key === "Escape") { e.preventDefault(); clearSavedSearch(); }
+  }
+
+  // Empty query = the plain list of sets, i.e. exactly what was here before the
+  // search box existed. Searching is an overlay on that, never a replacement.
+  function savedListHtml() {
+    const q = savedQuery.trim();
+    if (!q) return savedComps.map(savedTabHtml).join("");
+
+    const res = CompSearch.search(savedComps, q, SAVED_SEARCH_LIMIT);
+    if (!res.rows.length) {
+      return `<div class="saved-note">No comped card matches “${escHtml(q)}”.</div>`;
+    }
+    // Says how much is behind the list, so a capped result never looks like
+    // the whole answer.
+    const head = `${res.matched} ${res.matched === 1 ? "card" : "cards"}`
+      + ` in ${res.sets} ${res.sets === 1 ? "set" : "sets"}`
+      + (res.truncated ? ` · showing the top ${res.rows.length}` : "");
+    return `<div class="saved-note">${escHtml(head)}</div>`
+      + res.rows.map(savedHitHtml).join("");
+  }
+
+  function savedHitHtml(r) {
+    const set = r.set;
+    const p = compPreview(set);
+    const payout = Money.computeTotals(set.compItems || [], set.tradeItems || [], headerPct).payout;
+
+    // Enough of the set to recognise which negotiation this was, without
+    // repeating the card that is already on the line above.
+    const bits = [];
+    if (p.total) bits.push(`in a set of ${p.total} ${p.total === 1 ? "card" : "cards"}`);
+    if (r.excluded) bits.push("excluded from the payout");
+    bits.push(relTime(savedAt(set)));
+
+    return `
+      <button class="saved-tab${r.excluded ? ' excluded' : ''}" onclick="selectSavedTab(${set.id})"
+              title="Open the comp set holding ${escHtml(r.label)}">
+        <span class="st-hit">
+          <span class="st-hit-name">${escHtml(r.label)}</span>
+          <span class="st-hit-money">$${fmtUSD(r.price)} <span class="st-hit-pct">@ ${r.pct}%</span></span>
+        </span>
+        <span class="st-meta">
+          <span class="st-meta-left">${escHtml(bits.join(" · "))}</span>
+          <span class="st-total"><span class="st-total-label">payout</span> $${fmtUSD(payout)}</span>
+        </span>
+      </button>`;
+  }
+
   function renderSavedTabs() {
     const section = document.getElementById("savedTabsSection");
     if (compItems.length > 0 || tradeItems.length > 0 || savedComps.length === 0) {
       section.innerHTML = "";
+      savedQuery = "";   // there is nothing to filter; don't resurrect it later
       return;
     }
-
-    const tabs = savedComps.map(savedTabHtml).join("");
 
     section.innerHTML = `
       <hr class="divider">
@@ -2111,7 +2249,13 @@
           <span class="section-label">Recent Comp Sets</span>
           <button class="icon-add-btn" onclick="clearSavedComps()" title="Clear all recent comp sets">×</button>
         </div>
-        <div class="saved-tabs">${tabs}</div>
+        <div class="saved-search">
+          <input type="text" id="savedSearchInput" placeholder="Search a card in these sets…"
+                 value="${escHtml(savedQuery)}" autocomplete="off"
+                 oninput="onSavedSearch(this.value)" onkeydown="onSavedSearchKey(event)" />
+          <button class="clear-btn" onclick="clearSavedSearch()" title="Clear search">×</button>
+        </div>
+        <div class="saved-tabs" id="savedTabsList">${savedListHtml()}</div>
       </div>`;
   }
 
