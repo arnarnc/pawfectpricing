@@ -2068,6 +2068,22 @@
     renderComp();
   }
 
+  // Which saved set the editor is holding, if any. Since opening a set no
+  // longer removes it from the list, a save has to know whether it is
+  // replacing that set or filing a new one — without this, opening a set and
+  // saving it back would leave two copies of it.
+  //
+  // Persisted, because the link must survive a reload. A phone dropping the
+  // tab mid-negotiation would otherwise sever it silently, and the next save
+  // would duplicate the set instead of updating it.
+  let activeSetId = Number(localStorage.getItem("activeSetId") || 0) || null;
+
+  function setActiveSet(id) {
+    activeSetId = id || null;
+    if (activeSetId) localStorage.setItem("activeSetId", String(activeSetId));
+    else localStorage.removeItem("activeSetId");
+  }
+
   // Empty the active editor. Both ways of finishing a comp end here; what
   // differs is only whether the set was filed away first.
   function clearActiveComp() {
@@ -2075,28 +2091,49 @@
     tradeItems = [];
     saveComp();
     saveTrade();
-    renderComp();
+    renderComp();       // clears activeSetId — an empty editor holds no set
   }
 
   // The other way out of a comp: a customer who walked, a list started on the
-  // wrong card, a quote nobody needs a record of. Save & Clear files the set
-  // and everything it takes is recoverable from Recent Comp Sets; this throws
-  // it away for good, so it asks first and names exactly what goes. Saved sets
-  // are never touched — this closes the comp in hand, nothing else.
+  // wrong card, a quote nobody needs a record of. This NEVER files anything —
+  // a comp typed from scratch and closed leaves no saved set behind, which is
+  // the whole point of having it beside Save & Clear.
+  //
+  // What that costs depends on where the comp came from, so the question does
+  // too. A set opened from the list is still in the list, so closing drops
+  // only the edits made since; a comp typed from scratch has nothing to fall
+  // back to and really is gone. Wording them the same would either frighten
+  // people off a safe action or wave them through a destructive one.
   function closeCompWithoutSaving() {
     const cards = compItems.length, vendor = tradeItems.length;
     if (!cards && !vendor) return;
-    const parts = [];
-    if (cards)  parts.push(`${cards} ${cards === 1 ? "card" : "cards"}`);
-    if (vendor) parts.push(`${vendor} vendor ${vendor === 1 ? "item" : "items"}`);
-    if (!confirm(`Close without saving? ${parts.join(" and ")} will be lost, and this cannot be undone.`)) return;
+    let msg;
+    if (activeSetId && savedComps.some(s => s.id === activeSetId)) {
+      msg = "Close this comp? It stays in Recent Comp Sets as it was last saved, "
+          + "and any changes made since are dropped.";
+    } else {
+      const parts = [];
+      if (cards)  parts.push(`${cards} ${cards === 1 ? "card" : "cards"}`);
+      if (vendor) parts.push(`${vendor} vendor ${vendor === 1 ? "item" : "items"}`);
+      msg = `Close without saving? ${parts.join(" and ")} will be lost, and this cannot be undone.`;
+    }
+    if (!confirm(msg)) return;
     clearActiveComp();
   }
 
   function saveAndClearComp() {
     if (compItems.length > 0 || tradeItems.length > 0) {
+      // Re-saving a set that was opened from the list REPLACES it rather than
+      // filing a second copy — reopening a set to correct one price must not
+      // leave two nearly-identical sets to tell apart later. It keeps its id
+      // (so it stays the same set) and moves to the front, being the one most
+      // recently worked on, which is the order this list is in.
+      const reusedId = activeSetId && savedComps.some(s => s.id === activeSetId)
+        ? activeSetId
+        : null;
+      if (reusedId) savedComps = savedComps.filter(s => s.id !== reusedId);
       savedComps.unshift({
-        id: Money.nextId(),
+        id: reusedId || Money.nextId(),
         t: Date.now(),
         compItems: JSON.parse(JSON.stringify(compItems)),
         tradeItems: JSON.parse(JSON.stringify(tradeItems))
@@ -2203,16 +2240,21 @@
       </button>`;
   }
 
+  // Opening a set copies it into the editor and LEAVES IT IN THE LIST. It used
+  // to remove it — open was "take it out of the drawer", Save & Clear was "put
+  // it back" — which meant closing a set you had only opened to look at threw
+  // it away. Opening is now non-destructive: the set on file stays exactly as
+  // it was until a save replaces it, so there is no way to lose one by
+  // changing your mind.
   function selectSavedTab(id) {
     const set = savedComps.find(s => s.id === id);
     if (!set) return;
     compItems  = Money.normalizeItems(JSON.parse(JSON.stringify(set.compItems)));
     tradeItems = Money.normalizeItems(JSON.parse(JSON.stringify(set.tradeItems)));
     if (compItems.length) setHeaderPct(compItems[0].pct);
-    savedComps = savedComps.filter(s => s.id !== id);
+    setActiveSet(id);        // the editor is now working ON that set
     saveComp();
     saveTrade();
-    saveSavedComps();
     renderComp();
   }
 
@@ -2358,7 +2400,16 @@
 
   function renderComp() {
     const section = document.getElementById("compSection");
-    if (compItems.length === 0 && tradeItems.length === 0) { section.innerHTML = ""; renderSavedTabs(); return; }
+    if (compItems.length === 0 && tradeItems.length === 0) {
+      // An empty editor holds no set — however it got empty. Doing this in the
+      // one place every path funnels through is what stops a stale link
+      // surviving (delete the last row by hand, start an unrelated comp, and a
+      // save would otherwise overwrite the set you had opened before).
+      if (activeSetId) setActiveSet(null);
+      section.innerHTML = "";
+      renderSavedTabs();
+      return;
+    }
 
     const totals = Money.computeTotals(compItems, tradeItems, headerPct);
     const marketTotal = totals.market;

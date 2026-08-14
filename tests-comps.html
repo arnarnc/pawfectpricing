@@ -273,12 +273,33 @@
       group("Closing a comp without saving");
       ok(/function closeCompWithoutSaving\(\)/.test(src), "there is a second way out of a comp");
       const close = (/function closeCompWithoutSaving\(\)\s*\{[\s\S]*?\n  \}/.exec(src) || [""])[0];
-      ok(/confirm\(/.test(close), "it confirms first — the data it drops is not recoverable");
+      ok(/confirm\(/.test(close), "it confirms first");
       ok(/clearActiveComp\(\)/.test(close), "and empties the active comp through the shared exit");
-      ok(!/savedComps/.test(close), "it never touches the saved sets — it closes the comp in hand, nothing else");
-      ok(!/savedComps\.unshift/.test(close), "and specifically does not file the set it is discarding");
+      ok(!/savedComps\.unshift/.test(close) && !/saveSavedComps\(/.test(close),
+         "it files NOTHING — a comp typed from scratch and closed leaves no saved set behind");
+      ok(/savedComps\.some\(/.test(close),
+         "it asks a different question when the comp came from a saved set, since that set survives either way");
       ok(/onclick="closeCompWithoutSaving\(\)"/.test(src) && /onclick="saveAndClearComp\(\)"/.test(src),
          "both exits are on screen together");
+
+      group("Opening a saved set does not consume it");
+      const open = (/function selectSavedTab\(id\)\s*\{[\s\S]*?\n  \}/.exec(src) || [""])[0];
+      ok(!/savedComps = savedComps\.filter/.test(open),
+         "opening no longer removes the set from the list — look at one and it is still there");
+      ok(!/saveSavedComps\(/.test(open), "and it writes nothing to the saved list at all");
+      ok(/setActiveSet\(id\)/.test(open), "it records which set the editor is working on");
+
+      const save = (/function saveAndClearComp\(\)\s*\{[\s\S]*?\n  \}/.exec(src) || [""])[0];
+      ok(/activeSetId && savedComps\.some\(/.test(save),
+         "saving checks whether the editor came from a set still on file");
+      ok(/savedComps\.filter\(s => s\.id !== reusedId\)/.test(save),
+         "and replaces that set rather than filing a second copy of it");
+      ok(/id: reusedId \|\| Money\.nextId\(\)/.test(save),
+         "a replaced set keeps its id; a fresh comp gets a new one");
+      ok(/localStorage\.setItem\("activeSetId"/.test(src),
+         "the link survives a reload, so a dropped tab can't turn the next save into a duplicate");
+      ok(/if \(activeSetId\) setActiveSet\(null\)/.test(src),
+         "and an emptied editor drops the link, so a later unrelated comp can't overwrite that set");
     } catch (e) {
       ok(false, "could not read index.html (serve this page over http, not file://)", String(e));
     }
