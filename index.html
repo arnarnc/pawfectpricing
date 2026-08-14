@@ -1055,6 +1055,31 @@
     return seen;
   }
 
+  // ── Hyphenated card-name suffixes ─────────────────────────
+  // The GX/EX era prints the suffix welded to the name — "Charizard-GX",
+  // "Mewtwo-EX", "Tapu Lele-GX" — and that's what the catalogue stores and the
+  // autocomplete fills in. 1,031 cards in the bundled snapshot are written that
+  // way (601 -GX, 430 -EX). eBay sellers mostly aren't, so requiring the token
+  // hides listings of the exact card: "Charizard-GX 150/147" returns 181
+  // against 215 for "Charizard 150/147", with nothing lost either way.
+  //
+  // Deliberately ONLY the hyphenated form. The spaced modern suffixes ("ex",
+  // "V", "VMAX") are left alone, because dropping those can stop eBay
+  // enforcing the collector number at all: "Charizard ex 54/91" returns 26
+  // listings, "Charizard 54/91" returns 103 — and the 78 extra are Base Set
+  // Charizard 4/102, a different card at a different price.
+  //
+  // "V-UNION" is safe by construction: nothing in the alternation matches the
+  // "UNION" half, and the "V" half is space-separated, not hyphenated.
+  const CARD_SUFFIX_RE = /-(?:vstar|vmax|gx|ex|v)(?=\s|$)/gi;
+
+  // Only applied once a full collector number is pinning the card down, so
+  // what's left still names one card rather than a whole species.
+  function stripCardSuffix(input) {
+    if (!/\d+\s*\/\s*\d+/.test(input)) return input;
+    return input.replace(CARD_SUFFIX_RE, "").replace(/\s{2,}/g, " ").trim();
+  }
+
   // The collector number goes to eBay exactly as typed. This used to expand
   // "72/78" into eBay's OR syntax — "(72/78,072/078)" — to catch listings that
   // pad differently, but eBay's parenthesised OR no longer unions: measured on
@@ -1090,7 +1115,7 @@
     return /\b(etb|elite trainer box|booster box|bbx|sealed|collection box|tin)\b/i.test(input);
   }
   function buildUrls(input) {
-    const normalized = expandProducts(expandConditions(normalizeCardNumber(input)));
+    const normalized = expandProducts(expandConditions(stripCardSuffix(normalizeCardNumber(input))));
     const encoded    = encodeURIComponent(normalized);
     const gradedFlag = isGraded(input) ? "Yes" : "No";
     const base = isSealedProduct(input)
