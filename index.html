@@ -130,7 +130,7 @@
     .btn-row a .btn-label { font-size: 12px; font-weight: 600; }
     .btn-row a .btn-sub   { font-size: 10px; font-weight: 400; opacity: 0.7; }
     .btn-sold  { background: var(--purple); }
-    .btn-cheap { background: var(--green); }
+    .btn-avail { background: var(--green); }
 
     /* ── Desktop "Go" mode ── */
     .go-row { display: grid; grid-template-columns: 3fr 1fr; gap: 8px; }
@@ -837,9 +837,9 @@
         <span class="btn-label">Australia</span>
         <span class="btn-sub">Sold</span>
       </a>
-      <a id="worldwideCheapLink" class="btn-cheap" target="_blank" onclick="recordSearch()">
-        <span class="btn-icon">💰</span>
-        <span class="btn-label">Cheapest</span>
+      <a id="worldwideAvailLink" class="btn-avail" target="_blank" onclick="recordSearch()">
+        <span class="btn-icon">🛒</span>
+        <span class="btn-label">Available</span>
         <span class="btn-sub">Buy Now</span>
       </a>
     </div>
@@ -984,11 +984,11 @@
     recordSearch();
     closeAll(); // close any existing panels before opening a fresh set
     const urls = buildUrls(value);
-    // Top-to-bottom: World Sold, AU Sold, Cheapest.
+    // Top-to-bottom: World Sold, AU Sold, Available.
     const order = [
-      { name: "ppGlobal", url: urls.worldwideSold }, // top
+      { name: "ppGlobal", url: urls.worldwideSold },  // top
       { name: "ppAU",     url: urls.auSold },         // middle
-      { name: "ppCheap",  url: urls.worldwideChea },  // bottom
+      { name: "ppAvail",  url: urls.worldwideAvail }, // bottom
     ];
     // Reserve a left strip for this app; the 3 eBay searches each take the
     // full remaining width and full screen height, cascaded by a small offset
@@ -1102,6 +1102,21 @@
   // sellers title a listing only "Crown Zenith ETB". The phrase still wins on
   // volume (203 vs 139) and precision, at the cost of a ~13-20% blind spot that
   // one search cannot close. Do NOT "fix" this by reintroducing OR syntax.
+
+  // eBay's `_sop` sort codes, named so a URL says what it does.
+  //
+  // The sold searches want RECENT: the most recent sales are the ones a comp
+  // should be built from, so newest-listed-first is the right order there.
+  //
+  // The active search wants BEST_MATCH, eBay's own relevance ranking. It used
+  // to force price-lowest-first, which sorted the wrong thing to the top: the
+  // cheapest listings for a card are overwhelmingly the near-miss ones —
+  // proxies, damaged copies, the wrong print, a lot listed as a single — so
+  // the first screen answered "what is the cheapest thing eBay will show me
+  // for these words" rather than "what is this card selling for right now".
+  // Relevance puts the actual card first; the price is still on every row.
+  const SORT = { RECENT: 13, BEST_MATCH: 12 };
+
   const CONDITIONS = { lp:"lightly played", nm:"near mint", mp:"moderately played", hp:"heavily played", dmg:"damaged" };
   const PRODUCTS   = { etb:"elite trainer box", bbx:"booster box" };
 
@@ -1123,9 +1138,9 @@
       : `_sacat=0&Graded=${gradedFlag}&_dcat=183454`;
     const binParam = excludeAuctions ? "&LH_BIN=1" : "";
     return {
-      worldwideSold: `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&${base}&LH_Sold=1&LH_Complete=1&rt=nc&_sop=13${binParam}`,
-      auSold:        `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&${base}&LH_Sold=1&LH_Complete=1&rt=nc&LH_PrefLoc=1&_sop=13${binParam}`,
-      worldwideChea: `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&${base}&LH_BIN=1&_sop=15`
+      worldwideSold:  `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&${base}&LH_Sold=1&LH_Complete=1&rt=nc&_sop=${SORT.RECENT}${binParam}`,
+      auSold:         `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&${base}&LH_Sold=1&LH_Complete=1&rt=nc&LH_PrefLoc=1&_sop=${SORT.RECENT}${binParam}`,
+      worldwideAvail: `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&${base}&LH_BIN=1&_sop=${SORT.BEST_MATCH}`
     };
   }
 
@@ -1152,7 +1167,7 @@
     const urls = buildUrls(value);
     document.getElementById("worldwideSoldLink").href  = urls.worldwideSold;
     document.getElementById("auSoldLink").href         = urls.auSold;
-    document.getElementById("worldwideCheapLink").href = urls.worldwideChea;
+    document.getElementById("worldwideAvailLink").href = urls.worldwideAvail;
     if (isSealedProduct(value)) {
       statusEl.innerHTML = '<span class="status-badge sealed">📦 Sealed</span>';
     } else if (isGraded(value)) {
