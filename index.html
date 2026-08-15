@@ -768,6 +768,29 @@
       justify-content: space-between;
     }
 
+    /* Two icon buttons on the right of a block header. block-hdr is a
+       space-between pair, so the actions have to travel together as one child
+       or the label and the buttons would spread apart. */
+    .hdr-actions { display: flex; align-items: center; gap: 6px; }
+
+    /* Last-resort landing place for the shared text when neither the share
+       sheet nor the clipboard is available. Monospace because it is a list of
+       aligned prices, and tall enough to be worth selecting by hand. */
+    .share-dump {
+      width: 100%;
+      min-height: 180px;
+      margin-bottom: 8px;
+      padding: 8px;
+      background: var(--surface2);
+      color: var(--text2);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      line-height: 1.5;
+      resize: vertical;
+    }
+
     .icon-add-btn {
       width: 26px; height: 26px;
       background: transparent;
@@ -2269,6 +2292,128 @@
     renderSavedTabs();
   }
 
+  // ── Getting the saved sets off this device ────────────────
+  // Comp sets never leave the device that made them. The gist sync carries
+  // recent searches ONLY (see recents.js -- it never touches savedComps), and
+  // localStorage is per-device, so a stack of comps built on a phone is
+  // stranded there with no way out: there is no export, and a phone browser
+  // has no console to read it from.
+  //
+  // This is the way off, and it deliberately needs nothing: no token, no
+  // pairing, no cable. Render every set as text and hand it to the OS share
+  // sheet, which drops it into any messaging app.
+  //
+  // Plain text rather than JSON because it has to survive being read by a
+  // person in a chat window. It still carries every field that decides money
+  // -- price, rate, and whether a row was excluded -- so nothing about what a
+  // set was worth is lost in the trip.
+  const SHARE_ICON = "⤴";
+
+  function savedCompsText() {
+    const lines = [];
+    const n = savedComps.length;
+    lines.push(`Pawfect comps · ${n} ${n === 1 ? "set" : "sets"} · exported ${new Date().toLocaleString()}`);
+
+    savedComps.forEach((s, i) => {
+      const comps  = s.compItems  || [];
+      const trades = s.tradeItems || [];
+      const t = Money.computeTotals(comps, trades, headerPct);
+
+      lines.push("");
+      lines.push(`${i + 1}. ${new Date(savedAt(s)).toLocaleString()}`
+        + ` · ${comps.length} ${comps.length === 1 ? "card" : "cards"}`);
+
+      // Most valuable first -- the same order the set rows preview in, so the
+      // shared text reads the way the list on screen does.
+      comps.slice()
+        .sort((a, b) => Money.toDollars(b.price) - Money.toDollars(a.price))
+        .forEach(x => {
+          lines.push(`   ${x.excluded ? "(excluded) " : ""}${x.label}`
+            + ` — $${fmtUSD(x.price)} @ ${Money.toPct(x.pct, 100)}%`);
+        });
+
+      // Vendor rows carry `name`, not `label`, and no rate -- they are the
+      // other side of the trade, not something comped.
+      trades.forEach(x => {
+        lines.push(`   [vendor] ${x.excluded ? "(excluded) " : ""}${x.name} — $${fmtUSD(x.price)}`);
+      });
+
+      lines.push(`   Market $${fmtUSD(t.market)} · Payout $${fmtUSD(t.payout)}`
+        + (t.trade ? ` · Vendor $${fmtUSD(t.trade)}` : ""));
+    });
+
+    return lines.join("\n");
+  }
+
+  function shareSavedComps(btn) {
+    if (!savedComps.length) return;
+    const text = savedCompsText();
+    const flash = mark => {
+      btn.textContent = mark;
+      setTimeout(() => { btn.textContent = SHARE_ICON; }, 2000);
+    };
+
+    // Share sheet on a phone, clipboard on a desktop. navigator.share exists
+    // on desktop Chrome too, but there it opens a Windows sheet with no
+    // messaging apps in it -- and cancelling that leaves you with nothing,
+    // which is a dead end. maxTouchPoints keeps the sheet for the device the
+    // feature is actually for.
+    if (navigator.share && navigator.maxTouchPoints > 0) {
+      navigator.share({ title: "Pawfect comps", text })
+        .then(() => flash("✓"))
+        .catch(err => {
+          // Dismissing the sheet is a decision, not a failure. Copying instead
+          // would silently do something that wasn't asked for.
+          if (err && err.name === "AbortError") return;
+          copyText(text, flash);
+        });
+      return;
+    }
+    copyText(text, flash);
+  }
+
+  function copyText(text, flash) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => flash("✓"), () => legacyCopy(text, flash));
+    } else {
+      legacyCopy(text, flash);
+    }
+  }
+
+  // execCommand still works where the async clipboard API doesn't -- an
+  // insecure context, an older mobile browser. If even that fails the data
+  // must not stay trapped, so it goes on screen, selected, to be copied by
+  // hand. A dead button is the one outcome this feature cannot have.
+  function legacyCopy(text, flash) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.top = "-1000px";
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    if (ok) { flash("✓"); return; }
+    showSharedText(text);
+  }
+
+  function showSharedText(text) {
+    const list = document.getElementById("savedTabsList");
+    if (!list) return;
+    let box = list.querySelector(".share-dump");
+    if (!box) {
+      box = document.createElement("textarea");
+      box.className = "share-dump";
+      box.setAttribute("readonly", "");
+      list.insertBefore(box, list.firstChild);
+    }
+    box.value = text;
+    box.focus();
+    box.select();
+  }
+
   // ── Searching the saved sets ──────────────────────────────
   // A stack of past comps gets asked a card-level question — "what did I comp
   // this at last time?" — so typing here filters to the matching CARDS, each
@@ -2370,7 +2515,11 @@
       <div class="section-block">
         <div class="block-hdr">
           <span class="section-label">Recent Comp Sets</span>
-          <button class="icon-add-btn" onclick="clearSavedComps()" title="Clear every saved comp set">×</button>
+          <span class="hdr-actions">
+            <button class="icon-add-btn" onclick="shareSavedComps(this)"
+                    title="Share every saved comp set as text — sends it to a messaging app, or copies it">${SHARE_ICON}</button>
+            <button class="icon-add-btn" onclick="clearSavedComps()" title="Clear every saved comp set">×</button>
+          </span>
         </div>
         <div class="saved-search">
           <input type="text" id="savedSearchInput" placeholder="Search a card in these sets…"
