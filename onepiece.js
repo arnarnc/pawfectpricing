@@ -165,27 +165,88 @@
     return keys.filter(Boolean);
   }
 
-  // ── Auto-dash ─────────────────────────────────────────────
-  // A card ID typed with a space is still one card ID: "op01 021" is OP01-021
-  // and "p 150" is P-150. Rejoined before tokenising, because once the halves
-  // are separate tokens they are parsed as unrelated things and the search
-  // loses the card entirely.
+  // ── ID repair: O vs 0, and the missing dash ───────────────
+  // Two things go wrong when a card ID is typed on a phone, and both are
+  // repairable without guessing, because the ID shape is rigid: a set family in
+  // LETTERS, then digits, and nothing else.
   //
-  // The whole difficulty is telling that apart from a word that simply has a
-  // number after it -- "psa 10", "nm 10", "x 3". Two guards do it: the left
-  // token has to look like a set family (letters, optionally a set number), and
-  // it must not be one of the words that routinely precedes a number. A letter
-  // run with no digits is accepted only at one or two characters, which is what
-  // promo families look like ("p", "eb"); "one 10" and "gem 10" never qualify.
-  var NOT_FAMILY = /^(psa|bgs|cgc|sgc|tag|ace|nm|lp|mp|hp|dmg|gem|mint|raw|lot|of|x|and|the|one|piece|op|en|eng|jp|jpn|sp|aa|fa|tr|pf|tf|jr|mr|wp|pan|ser|sd|st|dp)$/;
+  //   the wrong O    "0P01-016", "OPO1-016", "OP01-O16" are all OP01-016. The
+  //                  ID is a dense mix of the letter O and the digit 0 -- the
+  //                  commonest family is literally "OP" and the numbers next to
+  //                  it are full of zeroes -- and the two keys sit side by side.
+  //   the missing -  "op01 021" is OP01-021; "p 150" is P-150.
+  //
+  // Both are settled by the same fact: there are exactly five set families, and
+  // they come from the catalogue rather than a hand-kept list, so a new set
+  // brings its family along with it. A token only counts as an ID if its
+  // leading run IS one of those families (reading O and 0 as the same
+  // character) and everything after it is digits once the O's are flipped back.
+  // That one rule replaces the old denylist of words-that-precede-a-number:
+  // "psa 10" cannot join because "psa" is not a family, and "robin" is not
+  // repaired because "-obin" is not a number. A token that fails is handed back
+  // untouched, so a character's name is never "corrected".
+  var FALLBACK_FAMILIES = ["OP", "ST", "EB", "PRB", "P"];
+  var families = null;
 
-  function autoDash(str) {
-    return String(str || "").replace(/\b([a-z]{1,4}\d{0,2})[\s.]+(\d{1,4})\b/g,
-      function (whole, left, right) {
-        if (NOT_FAMILY.test(left)) return whole;
-        if (!/\d/.test(left) && left.length > 2) return whole;
-        return left + "-" + right;
-      });
+  function familyList() {
+    if (families) return families;
+    var seen = {};
+    rows().forEach(function (r) {
+      var m = /^([A-Za-z]+)/.exec(String(r[1] || ""));
+      if (m) seen[m[1].toLowerCase()] = 1;
+    });
+    families = Object.keys(seen);
+    if (!families.length) families = FALLBACK_FAMILIES.map(function (f) { return f.toLowerCase(); });
+    // Longest first, or "PRB01-001" is read as the promo family P followed by
+    // a number that isn't one.
+    families.sort(function (a, b) { return b.length - a.length; });
+    return families;
+  }
+
+  // Lowercase ID with its separator normalised to a dash, or null if the token
+  // is not ID-shaped. A bare family ("op") comes back as itself, so it can
+  // still pick up the number typed after it.
+  function repairCode(tok) {
+    var low = String(tok || "").toLowerCase();
+    var fams = familyList();
+    for (var i = 0; i < fams.length; i++) {
+      var f = fams[i];
+      // O and 0 are the same character for the purpose of finding the family.
+      if (low.slice(0, f.length).replace(/0/g, "o") !== f) continue;
+      var rest = low.slice(f.length).replace(/o/g, "0");
+      if (!rest) return f;
+      var m = /^[-.]?(\d{1,5})(?:[-.](\d{1,4}))?$/.exec(rest);
+      if (!m) continue;
+      return f + m[1] + (m[2] ? "-" + m[2] : "");
+    }
+    return null;
+  }
+
+  // A lone card number, possibly with O's typed for zeroes.
+  function asNumber(tok) {
+    var v = String(tok == null ? "" : tok).toLowerCase().replace(/o/g, "0");
+    return /^\d{1,4}$/.test(v) ? v : null;
+  }
+
+  // The pre-pass: repair every ID-shaped token, and glue a family to the number
+  // typed after it. Runs before tokenising, because once the halves are
+  // separate tokens they are parsed as unrelated things and the card is lost.
+  function normalizeIds(str) {
+    var parts = String(str == null ? "" : str).split(/\s+/);
+    var out = [];
+    for (var i = 0; i < parts.length; i++) {
+      var fixed = repairCode(parts[i]);
+      var num = fixed ? asNumber(parts[i + 1]) : null;
+      // Only a family that does not already carry a card number can take one:
+      // "op01-016 10" is an ID followed by a grade, not a longer ID.
+      if (num !== null && !(splitCode(fixed) || {}).card) {
+        out.push(fixed + "-" + num);
+        i++;
+        continue;
+      }
+      out.push(fixed || parts[i]);
+    }
+    return out.join(" ");
   }
 
   // ── Character names ───────────────────────────────────────
@@ -218,7 +279,7 @@
   // Never throws. A query it cannot make sense of comes back as name words and
   // no code, which is exactly what a free-text eBay search should be.
   function parseQuery(raw) {
-    var tokens = autoDash(String(raw == null ? "" : raw).toLowerCase().replace(/[,#]/g, " "))
+    var tokens = normalizeIds(String(raw == null ? "" : raw).toLowerCase().replace(/[,#]/g, " "))
       .split(/\s+/).filter(Boolean);
     var out = { code: "", codeRaw: "", treat: null, treatWords: [], lang: "",
                 name: [], extras: [], sealed: false, setCode: "" };

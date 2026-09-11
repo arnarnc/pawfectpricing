@@ -83,8 +83,23 @@
   eq(q("op01016"), "OP01-016", `no separator at all`);
   eq(q("st21-001"), "ST21-001", `starter deck IDs`);
   eq(q("prb01-001"), "PRB01-001", `4-letter set families`);
+  eq(q("st21 001"), "ST21-001", `every set family joins, not just OP`);
   eq(q("psa 10 op01-016"), "OP01-016 psa 10", `"psa 10" is a grade, NOT a card ID — never dashed`);
   eq(q("op01-016 nm 10"), "OP01-016 nm 10", `nor is a condition followed by a number`);
+  eq(q("nami 016"), "nami 016", `a name is not a set family, so nothing joins to it`);
+
+  group("O typed for 0, and 0 for O");
+  eq(q("0P01-016"), "OP01-016", `a zero where the family's O belongs`);
+  eq(q("OPO1-016"), "OP01-016", `an O inside the set number`);
+  eq(q("OP01-O16"), "OP01-016", `an O inside the card number`);
+  eq(q("EBO3-O9O"), "EB03-090", `all of it at once`);
+  eq(q("opo1 o16"), "OP01-016", `a mistyped ID that is ALSO missing its dash`);
+  ok(q("p-o01").indexOf("P-001") !== -1, `promos too`, `got ${q("p-o01")}`);
+  eq(q("robin op03-088"), "OP03-088 robin", `a name full of O's is not "repaired"`);
+  eq(q("boa hancock"), "hancock", `nor is one that starts like a family`);
+  eq(q("oden"), "oden", `"o"-initial names are left alone`);
+  eq(q("op01-016 10"), "OP01-016 10",
+     `an ID that already has a card number does not swallow the grade after it`);
 
   group("Set code vs card number — the OP17 trap");
   eq(OP.parseQuery("op17").setCode, "OP17", `"op17" is a SET, not card OP01-007`);
