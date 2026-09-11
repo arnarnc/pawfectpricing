@@ -5,17 +5,25 @@
 // collector number" because the number ("125/197") is only unique inside its
 // set. A One Piece card is pinned by its ID alone -- "OP01-016" carries the set
 // (OP01) and the card (016) in one token, and no other card in the game shares
-// it. The character name is decoration: typing "Nami OP01-016" on eBay can only
-// ever return FEWER listings than "OP01-016", never more, because eBay ANDs
-// every word. So the name is what you TYPE to find the card, and the ID is what
-// gets SEARCHED.
+// it. The name is still worth sending -- plenty of sellers title on the
+// character and never type an ID at all -- but it is sent SHORT, one word, for
+// the same reason: eBay ANDs every word, so "Monkey D Luffy" quietly deletes
+// every listing that just said "Luffy".
 //
 // What the ID does not pin down is the printing, and that is where the money
 // is. OP01-016 exists as a plain Rare (a couple of dollars), as an Alternate
 // Art (hundreds), and as a Manga Art (thousands). One number, three cards, three
-// prices. So this module treats the PRINT as the unit: the catalogue stores one
-// row per printing, the dropdown lists them separately, and a short tag ("aa",
-// "manga", "sp") is what tells eBay which one you are holding.
+// prices. So a short tag ("aa", "manga", "sp") rides along to say which one you
+// are holding.
+//
+// The query this builds is deliberately THIN. eBay ANDs every word, so every
+// word added is listings removed, and the earlier build spelled its tags out
+// ("aa" -> "alt art") and excluded words the plain print supposedly never has
+// ("-alt -manga -parallel"). Both guesses cost real comps: a seller who titled
+// the card "Alternate Art" or mentioned "alt" anywhere in the title vanished.
+// So the rule now is: keep what was TYPED. Tags go in verbatim, the character
+// name goes in but trimmed to the one word eBay titles actually use ("luffy",
+// not "monkey.d.luffy"), and nothing is excluded.
 //
 // Depends on cards_op.js (CARDS_OP). Standalone and side-effect free otherwise.
 
@@ -23,53 +31,49 @@
   "use strict";
 
   // ── Print treatments ──────────────────────────────────────
-  // Three columns, and they are deliberately not the same words:
+  // Three columns now, not four:
   //
   //   code   what cards_op.js stores (from the Limitless print label)
-  //   label  what the dropdown and the status badge show a human
-  //   ebay   what actually goes into the eBay search box
+  //   label  what the status badge shows a human
   //   type   every shorthand that maps to this treatment
   //
-  // The `ebay` column is the one to tune. eBay ANDs every word and has no
-  // working OR (see the long note in index.html's buildUrls), so each entry is
-  // ONE phrase and the only question is which phrase the most sellers used.
-  // Where two spellings compete, the shorter, more common one wins: sellers
-  // write "alt art" far more than "alternate art", and a listing titled
-  // "Alternate Art" is missed either way if you guess wrong -- but guessing
-  // "alt art" misses fewer. Single tokens ("manga", "serial", "pandaman") are
-  // free of that problem entirely and are preferred wherever one exists.
+  // There is no longer an `ebay` column. What goes to eBay is the token the
+  // user typed, unexpanded -- "alt" stays "alt", "sp" stays "sp", "treasure"
+  // stays "treasure". A seller who wrote "Alt Art", "Alternate Art" or just
+  // "ALT" is matched by the short form and missed by the long one, and the
+  // short form is never worse. The table survives only to name the printing in
+  // the badge and to recognise a tag as "not part of the character's name".
   var TREATMENTS = [
-    { code: "AA",     label: "Alt Art",      ebay: "alt art",     type: ["aa", "alt", "altart", "alternate"] },
-    { code: "MANGA",  label: "Manga",        ebay: "manga",       type: ["manga", "mr", "comic"] },
-    { code: "SP",     label: "SP",           ebay: "sp",          type: ["sp", "special"] },
-    { code: "FA",     label: "Full Art",     ebay: "full art",    type: ["fa", "fullart"] },
-    { code: "TR",     label: "Treasure",     ebay: "treasure",    type: ["tr", "treasure"] },
-    { code: "PAN",    label: "Pandaman",     ebay: "pandaman",    type: ["pan", "panda", "pandaman"] },
-    { code: "TF",     label: "Textured",     ebay: "textured",    type: ["tf", "textured"] },
-    { code: "PF",     label: "Pirate Foil",  ebay: "pirate foil", type: ["pf", "pirate"] },
-    { code: "SERIAL", label: "Serial",       ebay: "serial",      type: ["serial", "ser"] },
-    { code: "WINNER", label: "Winner",       ebay: "winner",      type: ["winner", "win"] },
-    { code: "JR",     label: "Judge",        ebay: "judge",       type: ["jr", "judge"] },
-    { code: "WANTED", label: "Wanted",       ebay: "wanted",      type: ["wanted", "wp"] }
+    { code: "AA",     label: "Alt Art",     type: ["aa", "alt", "altart", "alternate"] },
+    { code: "MANGA",  label: "Manga",       type: ["manga", "mr", "comic"] },
+    { code: "SP",     label: "SP",          type: ["sp", "special"] },
+    { code: "FA",     label: "Full Art",    type: ["fa", "fullart"] },
+    { code: "TR",     label: "Treasure",    type: ["tr", "treasure"] },
+    { code: "PAN",    label: "Pandaman",    type: ["pan", "panda", "pandaman"] },
+    { code: "TF",     label: "Textured",    type: ["tf", "textured"] },
+    { code: "PF",     label: "Pirate Foil", type: ["pf", "pirate"] },
+    { code: "SERIAL", label: "Serial",      type: ["serial", "ser"] },
+    { code: "WINNER", label: "Winner",      type: ["winner", "win"] },
+    { code: "JR",     label: "Judge",       type: ["jr", "judge"] },
+    { code: "WANTED", label: "Wanted",      type: ["wanted", "wp"] }
   ];
 
-  // The plain printing is a treatment too, from the search's point of view:
-  // "OP01-016" alone returns the alt art and the manga art alongside it, and
-  // those sold for 100x the card you are holding. It is the one case that has
-  // to be expressed as exclusions rather than a keyword, because the base print
-  // is defined by what it ISN'T. Kept narrow on purpose -- "-art" would also
-  // strike out any listing whose title happens to say "card art".
+  // The plain printing names itself in the badge but contributes NOTHING to the
+  // eBay query. It used to contribute exclusions ("-alt -manga -parallel"),
+  // which is the single biggest source of missing comps in the old build: a
+  // listing that merely mentioned one of those words anywhere in its title was
+  // struck out, base print or not. No seller writes "base" either, so there is
+  // no keyword to swap the exclusions for -- the honest answer is nothing.
   var BASE = {
-    code: "BASE", label: "Base Print", ebay: "-alt -manga -parallel -serial",
+    code: "BASE", label: "Base Print", quiet: true,
     type: ["base", "reg", "regular", "normal", "plain"]
   };
 
-  // Language. English is the default and gets no keyword: most English listings
-  // never say "english", so requiring the word would drop more real comps than
-  // the Japanese listings it removes. Excluding the other language is the
-  // higher-recall way to say the same thing.
+  // Language, spelled out either way. "en" -> "english" and "jp" -> "japanese",
+  // both as positive keywords: this is the one place a word is ADDED rather
+  // than passed through, because "en"/"jp" are shorthand no seller ever types.
   var LANGS = {
-    en: "-japanese", eng: "-japanese", english: "-japanese",
+    en: "english", eng: "english", english: "english",
     jp: "japanese", jpn: "japanese", japanese: "japanese"
   };
 
@@ -89,7 +93,10 @@
   });
 
   // Everything the parser recognises as "not part of a character's name".
-  var GRADERS = /^(psa|bgs|cgc|sgc|tag|ace)$/;
+  // "ace" is deliberately NOT here, unlike on the Pokemon side: ACE Grading
+  // exists, but in One Piece "Ace" is Portgas D. Ace and that is overwhelmingly
+  // what the word means in this box. Treating it as a grader cost the name.
+  var GRADERS = /^(psa|bgs|cgc|sgc|tag)$/;
   var CONDITIONS = /^(nm|lp|mp|hp|dmg|mint|near|lightly|moderately|heavily|played|damaged|raw|graded|sealed|gem)$/;
 
   // Collector-number canonicaliser, injected by index.html so "OP01-016" and
@@ -158,32 +165,80 @@
     return keys.filter(Boolean);
   }
 
+  // ── Auto-dash ─────────────────────────────────────────────
+  // A card ID typed with a space is still one card ID: "op01 021" is OP01-021
+  // and "p 150" is P-150. Rejoined before tokenising, because once the halves
+  // are separate tokens they are parsed as unrelated things and the search
+  // loses the card entirely.
+  //
+  // The whole difficulty is telling that apart from a word that simply has a
+  // number after it -- "psa 10", "nm 10", "x 3". Two guards do it: the left
+  // token has to look like a set family (letters, optionally a set number), and
+  // it must not be one of the words that routinely precedes a number. A letter
+  // run with no digits is accepted only at one or two characters, which is what
+  // promo families look like ("p", "eb"); "one 10" and "gem 10" never qualify.
+  var NOT_FAMILY = /^(psa|bgs|cgc|sgc|tag|ace|nm|lp|mp|hp|dmg|gem|mint|raw|lot|of|x|and|the|one|piece|op|en|eng|jp|jpn|sp|aa|fa|tr|pf|tf|jr|mr|wp|pan|ser|sd|st|dp)$/;
+
+  function autoDash(str) {
+    return String(str || "").replace(/\b([a-z]{1,4}\d{0,2})[\s.]+(\d{1,4})\b/g,
+      function (whole, left, right) {
+        if (NOT_FAMILY.test(left)) return whole;
+        if (!/\d/.test(left) && left.length > 2) return whole;
+        return left + "-" + right;
+      });
+  }
+
+  // ── Character names ───────────────────────────────────────
+  // eBay titles use the short, famous form of a name, and every extra word is
+  // listings lost: "Monkey D Luffy", "Monkey.D.Luffy" and "Luffy" are all in
+  // the wild, but only the last one appears in all three. So a name is trimmed
+  // to its final real word -- "monkey.d.luffy" -> "luffy", "trafalgar law" ->
+  // "law", "charlotte katakuri" -> "katakuri" -- stepping back over single
+  // letters, which are initials and never the word a seller titled on.
+  var TREAT_FILLER = /^(art|rare|foil|card|parallel|edition)$/;
+
+  function shortName(words) {
+    var subs = [];
+    (words || []).forEach(function (w) {
+      String(w).split(/[^0-9a-zÀ-￿]+/i).forEach(function (sub) {
+        if (sub) subs.push(sub);
+      });
+    });
+    while (subs.length > 1 && subs[subs.length - 1].length < 2) subs.pop();
+    return subs.length ? subs[subs.length - 1] : "";
+  }
+
   // ── Query parsing ─────────────────────────────────────────
   // Turns whatever was typed into the parts that mean something:
   //
   //   "PSA 10 Nami OP01-016 aa nm"
-  //     -> code "OP01-016", treatment AA, name ["nami"],
-  //        extras ["psa","10","nm"], nameEnd 3
+  //     -> code "OP01-016", treat AA, treatWords ["aa"], name ["nami"],
+  //        extras ["psa","10","nm"]
   //
   // Never throws. A query it cannot make sense of comes back as name words and
   // no code, which is exactly what a free-text eBay search should be.
   function parseQuery(raw) {
-    var tokens = String(raw == null ? "" : raw)
-      .toLowerCase().replace(/[.,#]/g, " ")
-      // "op01 016" is one card ID typed with a space, not a set code followed
-      // by a stray number. Rejoin it before tokenising or the two halves are
-      // parsed as unrelated things and the search loses the card entirely.
-      .replace(/\b([a-z]{1,4}\d{1,2})\s+(\d{1,3})\b/g, "$1-$2")
+    var tokens = autoDash(String(raw == null ? "" : raw).toLowerCase().replace(/[,#]/g, " "))
       .split(/\s+/).filter(Boolean);
-    var out = { code: "", codeRaw: "", treat: null, lang: "", name: [], nameAt: [],
-                extras: [], codeAt: -1, sealed: false, setCode: "" };
+    var out = { code: "", codeRaw: "", treat: null, treatWords: [], lang: "",
+                name: [], extras: [], sealed: false, setCode: "" };
+    var treatAt = -2;   // index of the last treatment token, for absorbing "art"
 
     tokens.forEach(function (tok, i) {
       if (BY_SHORTHAND[tok] && !(tok === "sd" || tok === "st")) {
         // A treatment tag. "sp" is both a treatment and nothing else, so it is
         // safe; "sd"/"st" are product words and are handled below.
         if (!out.treat) out.treat = BY_SHORTHAND[tok];
+        if (!BY_SHORTHAND[tok].quiet) out.treatWords.push(tok);
+        treatAt = i;
         return;
+      }
+      // "art" in "alt art", "rare" in "treasure rare": filler that only means
+      // anything attached to the tag in front of it. Kept when it was typed --
+      // the rule is to pass wording through, not to invent or delete it -- but
+      // never allowed to fall through and be mistaken for a character's name.
+      if (TREAT_FILLER.test(tok) && i === treatAt + 1) {
+        out.treatWords.push(tok); treatAt = i; return;
       }
       if (LANGS[tok]) { out.lang = out.lang || LANGS[tok]; return; }
       if (PRODUCTS[tok]) { out.sealed = true; out.extras.push(PRODUCTS[tok]); return; }
@@ -194,12 +249,12 @@
         // the fragment as typed, because a half-finished ID still has to
         // prefix-match the catalogue while canonCode has already padded it out.
         if (split.card && !out.code) {
-          out.code = canonCode(tok); out.codeRaw = tok; out.codeAt = i; return;
+          out.code = canonCode(tok); out.codeRaw = tok; return;
         }
         if (!split.card && !out.setCode) { out.setCode = canonCode(tok); return; }
       }
       if (GRADERS.test(tok) || CONDITIONS.test(tok) || /\d/.test(tok)) { out.extras.push(tok); return; }
-      out.name.push(tok); out.nameAt.push(i);
+      out.name.push(tok);
     });
 
     if (SEALED_RE.test(String(raw || ""))) out.sealed = true;
@@ -215,15 +270,21 @@
   }
 
   // ── eBay keyword string ───────────────────────────────────
-  // The rule this whole module exists to apply: once a card ID is present, the
-  // character name is dropped, because it can only narrow a search that is
-  // already exact. Only names typed BEFORE the ID go -- that is where a name
-  // goes, and it keeps any word typed after the ID (a treatment eBay spells
-  // differently, "1st edition", whatever) working as a plain extra keyword.
+  // Thin on purpose. eBay ANDs every word and has no working OR, so the only
+  // lever is how few words are sent, and every one of them has to be a word a
+  // seller plausibly typed. What comes out is, in order:
   //
-  // With no ID, nothing is dropped and the input is passed through verbatim:
-  // a sealed-product or free-text search is the user's own wording, and this
-  // module has no business rewriting it.
+  //   the card ID          OP01-016      the one token that pins the card
+  //   the character name   luffy         trimmed to its last real word
+  //   the printing tag     alt           exactly as it was typed, never expanded
+  //   the language         english / japanese
+  //   anything else typed  psa 10, nm    in the order it was typed
+  //
+  // Nothing is excluded and nothing is spelled out. The name is kept even
+  // though the ID alone is unique: "OP01-016" is unique to the CARD, but plenty
+  // of sellers put the character and no ID in the title at all, and the ID is
+  // not what a buyer searched. Keeping one short name word costs the listings
+  // that spell the name differently, which after trimming is very few.
   function buildQuery(raw) {
     var p = parseQuery(raw);
 
@@ -233,29 +294,26 @@
     if (p.sealed && !p.code) {
       var setName = p.setCode ? setNameFor(p.setCode) : "";
       if (!setName) return String(raw || "");
-      // p.name is product wording here ("bbx", "booster", "box"), not a
-      // character -- there is no card ID for it to be redundant against, so it
-      // is kept and left for index.html's expandProducts to spell out.
       return ["one piece", setName].concat(p.extras, p.name).join(" ").trim();
     }
 
-    if (!p.code) return String(raw || "");
-
     var parts = [];
-    // A promo ID is just "P-001": two tokens, neither distinctive, which on its
-    // own returns half of eBay. Only that shape needs the game name bolted on.
-    if (/^[A-Z]+-/.test(p.code) && !/\d/.test(p.code.split("-")[0])) parts.push("one piece");
-    parts.push(p.code);
-    if (p.treat) parts.push(p.treat.ebay);
+    if (p.code) {
+      // A promo ID is just "P-001": two tokens, neither distinctive, which on
+      // its own returns half of eBay. Only that shape needs the game name.
+      if (/^[A-Z]+-/.test(p.code) && !/\d/.test(p.code.split("-")[0])) parts.push("one piece");
+      parts.push(p.code);
+    }
+    var nm = shortName(p.name);
+    if (nm) parts.push(nm);
+    parts = parts.concat(p.treatWords);
     if (p.lang) parts.push(p.lang);
-    // Extras keep their typed order; name words typed after the ID are kept too,
-    // since the drop rule only covers the ones in front of it.
     parts = parts.concat(p.extras);
-    p.name.forEach(function (w, i) { if (p.nameAt[i] > p.codeAt) parts.push(w); });
-    // Deduped because a shorthand and its spelled-out form often overlap:
-    // "op01-016 alt art" expands "alt" to "alt art" and would otherwise leave a
-    // stray second "art" in the query. eBay ANDs repeats, so a duplicate word
-    // costs nothing to remove and would cost recall to leave in.
+
+    // Nothing recognisable was typed -- a free-text search this module has no
+    // business rewriting. Hand back exactly what was in the box.
+    if (!parts.length) return String(raw || "");
+
     var seen = {};
     return parts.join(" ").split(/\s+/)
       .filter(function (w) { return w && !seen[w] && (seen[w] = 1); })

@@ -21,7 +21,8 @@
   <h1>One Piece search tests</h1>
   <p class="why" style="padding-left:0">Open this file in a browser. Every assertion below guards a way the One Piece
      search could quote the wrong card — the wrong printing, the wrong set, or a query so narrow eBay
-     returns nothing. Run it after touching onepiece.js or refreshing cards_op.js.</p>
+     returns nothing. The One Piece box has no catalogue dropdown: what you type is close to what is
+     searched, so these assertions are the whole contract. Run them after touching onepiece.js.</p>
   <div id="out"></div>
 
 <!-- Cache-busted on purpose: a test page must never assert against a stale copy
@@ -63,20 +64,27 @@
 
   const q = s => OP.buildQuery(s);
 
-  // ── The card ID is the search ──────────────────────────────
-  group("The ID is the search, the name is not");
+  // ── The query is what you typed ────────────────────────────
+  group("The query stays close to what was typed");
   eq(q("OP01-016"), "OP01-016", `a bare ID passes straight through`);
-  eq(q("Nami OP01-016"), "OP01-016", `the character name in front of the ID is dropped`);
-  eq(q("Monkey.D.Luffy OP01-003"), "OP01-003", `punctuated names are dropped too`);
-  eq(q("OP01-016 stamped"), "OP01-016 stamped", `a word typed AFTER the ID is kept — only names in front go`);
-  eq(q("luffy"), "luffy", `no ID means no rewriting: free text is the user's own wording`);
+  eq(q("Nami OP01-016"), "OP01-016 nami", `the character name is KEPT — sellers title on it`);
+  eq(q("Monkey.D.Luffy OP01-003"), "OP01-003 luffy",
+     `...but trimmed to the one word eBay titles actually use`);
+  eq(q("Trafalgar Law OP01-047"), "OP01-047 law", `last real word wins`);
+  eq(q("Portgas D Ace OP02-013"), "OP02-013 ace", `an initial is skipped over, not taken as the name`);
+  eq(q("luffy"), "luffy", `no ID, no rewriting`);
+  eq(q("monkey.d.luffy"), "luffy", `the name is shortened with or without an ID`);
+  eq(q("OP01-016 stamped"), "OP01-016 stamped", `an unrecognised word is passed through`);
 
-  group("Typing an ID loosely still finds the card");
+  group("Auto-dash: a spaced ID is still one ID");
+  eq(q("op01 021"), "OP01-021", `"op01 021" -> OP01-021`);
+  ok(q("p 150").indexOf("P-150") !== -1, `"p 150" -> P-150`, `got ${q("p 150")}`);
   eq(q("op1-16"), "OP01-016", `unpadded "op1-16"`);
-  eq(q("op01 016"), "OP01-016", `space instead of a dash`);
   eq(q("op01016"), "OP01-016", `no separator at all`);
   eq(q("st21-001"), "ST21-001", `starter deck IDs`);
   eq(q("prb01-001"), "PRB01-001", `4-letter set families`);
+  eq(q("psa 10 op01-016"), "OP01-016 psa 10", `"psa 10" is a grade, NOT a card ID — never dashed`);
+  eq(q("op01-016 nm 10"), "OP01-016 nm 10", `nor is a condition followed by a number`);
 
   group("Set code vs card number — the OP17 trap");
   eq(OP.parseQuery("op17").setCode, "OP17", `"op17" is a SET, not card OP01-007`);
@@ -91,25 +99,32 @@
      `got ${q("op01-016")}`);
 
   // ── Printings ──────────────────────────────────────────────
-  group("Printing shorthand");
-  eq(q("op01-016 aa"), "OP01-016 alt art", `aa -> alt art`);
-  eq(q("op01-016 alt"), "OP01-016 alt art", `alt is the same tag`);
-  eq(q("op01-016 manga"), "OP01-016 manga", `manga stays one token — nothing to guess wrong`);
-  eq(q("op09-001 sp"), "OP09-001 sp", `sp`);
-  eq(q("op11-118 fa"), "OP11-118 full art", `fa -> full art`);
-  eq(q("op01-016 alt art"), "OP01-016 alt art", `a spelled-out tag doesn't duplicate the expansion`);
-  eq(OP.badge("op01-016 aa"), "Alt Art", `the badge names the printing`);
+  group("Printing shorthand goes in exactly as typed");
+  eq(q("op01-016 alt"), "OP01-016 alt", `"alt" is NOT expanded to "alt art"`);
+  eq(q("op01-016 aa"), "OP01-016 aa", `nor is "aa"`);
+  eq(q("op09-001 sp"), "OP09-001 sp", `"sp", not "special card"`);
+  eq(q("op11-118 tr"), "OP11-118 tr", `"tr" stays "tr"`);
+  eq(q("op11-118 treasure"), "OP11-118 treasure", `"treasure", not "treasure rare"`);
+  eq(q("op01-016 alt art"), "OP01-016 alt art", `if you DO type "alt art", both words are kept`);
+  eq(q("op11-118 treasure rare"), "OP11-118 treasure rare", `same for a spelled-out rarity`);
+  eq(q("nami op01-016 alt art"), "OP01-016 nami alt art",
+     `the filler word after a tag is never mistaken for the character's name`);
+  eq(q("op01-016 base"), "OP01-016",
+     `"base" adds nothing — it used to add exclusions that ate real comps`);
+  eq(OP.badge("op01-016 aa"), "Alt Art", `the badge still names the printing`);
   eq(OP.badge("op01-016"), "Base Print", `no tag means the plain print`);
   eq(OP.badge("luffy"), "", `no ID, no printing claim`);
-  ok(q("op01-016 base").indexOf("-manga") !== -1,
-     `"base" excludes the parallels rather than adding a keyword`,
-     `got ${q("op01-016 base")}`);
 
-  group("Graders, conditions and language survive the rewrite");
-  eq(q("PSA 10 Nami OP01-016 aa"), "OP01-016 alt art psa 10", `grader and grade kept, name dropped`);
+  group("Language is spelled out, both ways");
+  eq(q("op01-016 en"), "OP01-016 english", `en -> english`);
+  eq(q("op01-016 jp"), "OP01-016 japanese", `jp -> japanese`);
+  ok(q("op01-016 en").indexOf("-japanese") === -1,
+     `no negative keyword — excluding a word drops listings that merely mention it`,
+     `got ${q("op01-016 en")}`);
+
+  group("Graders and conditions survive");
+  eq(q("PSA 10 Nami OP01-016 aa"), "OP01-016 nami aa psa 10", `grader, grade, name and tag all kept`);
   eq(q("op01-016 nm"), "OP01-016 nm", `condition shorthand is left for index.html to expand`);
-  eq(q("op01-016 jp"), "OP01-016 japanese", `jp asks for the Japanese print`);
-  eq(q("op01-016 en"), "OP01-016 -japanese", `en excludes it instead of demanding the word "english"`);
 
   group("Sealed products search the set NAME, not the code");
   ok(/booster box/i.test(q("op17 bbx")) === false, `bbx is expanded by index.html, not here`, `got ${q("op17 bbx")}`);
@@ -145,10 +160,6 @@
     ok(base.length > 0 && base.every(r => !r.treat),
        `"base" filters to plain prints`,
        `got ${base.map(r => r.treat).join(", ")}`);
-
-    const filled = (aa[0] || {}).fill || "";
-    eq(OP.buildQuery(filled), "OP01-016 alt art",
-       `picking a dropdown row round-trips to the right eBay query`);
 
     // "op01-01" is genuinely two questions — the cards numbered 01x, and the
     // unpadded reading of card 001 — and the search answers both rather than

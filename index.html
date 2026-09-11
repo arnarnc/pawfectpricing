@@ -1016,7 +1016,7 @@
 <script src="money.js?v=1"></script>
 <script src="recents.js?v=7"></script>
 <script src="compsearch.js?v=1"></script>
-<script src="onepiece.js?v=1"></script>
+<script src="onepiece.js?v=2"></script>
 <script src="cards.js"></script>
 <script src="cards_jp.js"></script>
 <script src="cards_op.js"></script>
@@ -1039,7 +1039,7 @@
   // the One Piece half.
   const PLACEHOLDERS = {
     pkmn: "e.g. Charizard 125/094 · try etb or bbx too",
-    op:   "e.g. OP01-016 aa · or type Nami and pick the print"
+    op:   "e.g. luffy op01 003 alt · type it how you'd search it"
   };
   let game = localStorage.getItem("game") === "op" ? "op" : "pkmn";
 
@@ -1074,10 +1074,10 @@
   // exactly the thing that carries a full card ID.
   function gameOf(label, stored) {
     if (stored === "op" || stored === "pkmn") return stored;
-    return String(label || "").split(/\s+/).some(t => {
-      const p = OnePiece.looksLikeCode(t) && OnePiece.parseQuery(t);
-      return p && p.code;
-    }) ? "op" : "pkmn";
+    // The whole label, not token by token: a One Piece ID is routinely typed
+    // with a space ("op01 003"), and neither half carries a card ID on its own.
+    // OnePiece.parseQuery rejoins it, so it is the only thing that can tell.
+    return OnePiece.parseQuery(label || "").code ? "op" : "pkmn";
   }
 
   // ── Auction toggle ────────────────────────────────────────
@@ -1446,70 +1446,38 @@
   const SUGGESTION_LIMIT = 12;
 
   // ── One Piece dropdown ────────────────────────────────────
-  // Local only, no network leg. There is no free One Piece card API to fall
-  // back to the way pokemontcg.io backs the Pokemon side, so cards_op.js is the
-  // whole catalogue — re-run scripts/fetch_op_cards.py when a set drops.
+  // There isn't one any more, beyond your own recent searches.
   //
-  // The rows are PRINTS, not cards: typing "nami" lists the plain OP01-016
-  // alongside its alternate art and its manga art, because those are three
-  // different things to price. Picking one writes its shorthand into the box,
-  // which is what pins the eBay search to that printing.
+  // The catalogue dropdown was the front half of a funnel whose back half was
+  // an over-tight eBay query: you picked a print row, it wrote a canonical
+  // "Monkey.D.Luffy OP01-003 aa" into the box, and that got spelled out into a
+  // search so specific that most of the real sold listings for the card fell
+  // outside it. Removing the rewriting without removing the dropdown would
+  // leave the dropdown filling the box with wording nothing downstream wants.
+  //
+  // So One Piece is now type-what-you-mean: the box is yours, the query is
+  // close to what you typed (see onepiece.js), and the only rows offered are
+  // searches you have actually run before. The Pokemon side keeps its full
+  // dropdown — its query still needs a name AND a collector number, so helping
+  // you produce a correct pair is worth the funnel there.
   function renderOpSuggestions(value) {
     cardLookupSeq++;                       // nothing in flight can outlive this
     clearTimeout(cardLookupTimer);
     if (cardLookupCtrl) cardLookupCtrl.abort();
 
     const p = OnePiece.parseQuery(value);
-    const cores = nameCores(p.name.join(" "));
-    const recents = recentRows(cores, p.code || p.setCode, "");
-
-    // Nothing to go on yet (a lone letter): recents plus the offline name list,
-    // matching what the Pokemon side does with the same amount of input.
-    if (!cores.length && !p.code && !p.setCode) { paintSuggestions(null, null, recents); return; }
-    if (!p.code && !p.setCode && cores.length === 1 && cores[0].length < 2) {
-      paintSuggestions(null, null, recents); return;
-    }
-
-    const results = OnePiece.search(value, SUGGESTION_LIMIT * 5) || [];
-    paintSuggestions(results.length ? rankOpResults(results, p) : null, null, recents);
+    paintRecentsOnly(recentRows(nameCores(p.name.join(" ")), p.code || p.setCode, ""));
   }
 
-  // Closest print first. An exactly-typed ID beats a name match, an exact name
-  // beats a prefix, and where a card has parallels the plain print leads —
-  // it is the copy you are most likely holding, and its tag-less row is the one
-  // a typed "aa" would have filtered out if you meant the other.
-  function rankOpResults(list, p) {
-    const code = (p.code || "").toUpperCase();
-    const typed = p.name.join(" ");
-    return list
-      .map((r, i) => {
-        let s = 0;
-        if (code && r.num.toUpperCase() === code) s += 100;
-        const n = r.name.toLowerCase();
-        if (typed && n === typed) s += 50;
-        else if (typed && n.startsWith(typed)) s += 25;
-        if (!r.treat) s += 5;
-        if (r.orig) s += 3;    // the packs it came in, not a later reprint
-        return { r, i, s };
-      })
-      .sort((a, b) => b.s - a.s || a.i - b.i)
-      .slice(0, SUGGESTION_LIMIT)
-      .map(x => x.r);
-  }
-
-  // Character names for the offline last-word autocomplete, deduped out of the
-  // print catalogue (5,000 prints, ~1,400 distinct characters) on first use.
-  let opNames = null;
-  function opNameList() {
-    if (opNames) return opNames;
-    const seen = new Set();
-    opNames = [];
-    // Bare name, not window.CARDS_OP: cards_op.js declares it with `const`,
-    // which never lands on the window object (same as CARDS in cards.js).
-    (typeof CARDS_OP !== "undefined" ? CARDS_OP : []).forEach(r => {
-      if (!seen.has(r[6])) { seen.add(r[6]); opNames.push(r[0]); }
-    });
-    return opNames;
+  // Recents and nothing else: no catalogue rows, and no offline name list
+  // either (that list is where "Monkey.D.Luffy" came from in the first place).
+  function paintRecentsOnly(recents) {
+    const box = document.getElementById("suggestions");
+    const sig = "op:" + recents.map(r => r.name + "|" + r.t).join("~");
+    if (sig === lastSuggestSig) return;
+    lastSuggestSig = sig;
+    box.innerHTML = "";
+    recents.forEach(r => box.appendChild(makeCardRow(r)));
   }
 
   // ── Recent searches ───────────────────────────────────────
@@ -1833,12 +1801,13 @@
   }
 
   // Cheap, offline last-word autocomplete over the bundled species/trainer
-  // name lists. Appends to the box (does not clear it).
+  // name lists. Appends to the box (does not clear it). Pokemon only — the One
+  // Piece dropdown is recents-only and never reaches here.
   function appendOfflineNames(box, raw) {
     const lastWord = raw.split(/\s+/).pop().toLowerCase();
     if (!lastWord) return;
     const prefix = raw.slice(0, raw.length - lastWord.length);
-    (game === "op" ? opNameList() : ALL_NAMES)
+    ALL_NAMES
       .filter(x => x.toLowerCase().startsWith(lastWord))
       .slice(0, 10)
       .forEach(item => {
