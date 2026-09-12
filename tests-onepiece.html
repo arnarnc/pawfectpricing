@@ -68,12 +68,12 @@
   group("The query stays close to what was typed");
   eq(q("OP01-016"), "OP01-016", `a bare ID passes straight through`);
   eq(q("Nami OP01-016"), "OP01-016 nami", `the character name is KEPT — sellers title on it`);
-  eq(q("Monkey.D.Luffy OP01-003"), "OP01-003 luffy",
-     `...but trimmed to the one word eBay titles actually use`);
-  eq(q("Trafalgar Law OP01-047"), "OP01-047 law", `last real word wins`);
-  eq(q("Portgas D Ace OP02-013"), "OP02-013 ace", `an initial is skipped over, not taken as the name`);
+  eq(q("Monkey.D.Luffy OP01-003"), "OP01-003 monkey.d.luffy",
+     `...whole, not trimmed to the one word eBay titles usually use`);
+  eq(q("Trafalgar Law OP01-047"), "OP01-047 trafalgar law", `both words survive`);
+  eq(q("Portgas D Ace OP02-013"), "OP02-013 portgas d ace", `initials included — you typed them`);
   eq(q("luffy"), "luffy", `no ID, no rewriting`);
-  eq(q("monkey.d.luffy"), "luffy", `the name is shortened with or without an ID`);
+  eq(q("monkey.d.luffy"), "monkey.d.luffy", `typing the long form IS the narrower search`);
   eq(q("OP01-016 stamped"), "OP01-016 stamped", `an unrecognised word is passed through`);
 
   group("Auto-dash: a spaced ID is still one ID");
@@ -96,10 +96,34 @@
   eq(q("opo1 o16"), "OP01-016", `a mistyped ID that is ALSO missing its dash`);
   ok(q("p-o01").indexOf("P-001") !== -1, `promos too`, `got ${q("p-o01")}`);
   eq(q("robin op03-088"), "OP03-088 robin", `a name full of O's is not "repaired"`);
-  eq(q("boa hancock"), "hancock", `nor is one that starts like a family`);
+  eq(q("boa hancock"), "boa hancock", `nor is one that starts like a family`);
   eq(q("oden"), "oden", `"o"-initial names are left alone`);
   eq(q("op01-016 10"), "OP01-016 10",
      `an ID that already has a card number does not swallow the grade after it`);
+
+  // ── hasCode: is the box even a One Piece search? ──────────
+  // index.html asks this of every keystroke to decide whether to move the game
+  // tab for you, so a false yes does not produce a bad search — it produces a
+  // bad MODE, mid-word, while you are typing something else entirely.
+  group("hasCode: One Piece codes, and nothing that merely looks like one");
+  const yes = t => ok(OP.hasCode(t), `"${t}" is a One Piece code`);
+  const no  = t => ok(!OP.hasCode(t), `"${t}" is NOT`, `hasCode said yes`);
+  ["op01-016", "op1-16", "op01 016", "op01016", "op17", "p-001", "p001",
+   "st21-001", "prb01-001", "eb03-090", "0P01-O16", "opo1 o16",
+   "psa 10 nami op01-016"].forEach(yes);
+  // Pokemon promo numbers are letters-then-digits too, which is why shape
+  // alone cannot answer this — only the set family can.
+  ["swsh050", "tg05", "gg70", "h31", "sv1-100", "pal 123",
+   "charizard 125/197", "professor's research 209/198", "psa 10 charizard",
+   "pikachu", "luffy", "monkey.d.luffy", "boa hancock"].forEach(no);
+  // A family with no number is two letters, not a card.
+  ["op", "st", "eb", "p"].forEach(no);
+  // The O-for-0 repair needs one real digit to fire, or every word whose
+  // letters after the family happen to be O's becomes an ID: "po" was reading
+  // as the promo card P-000 and "sto" as the set ST00, which bounced the game
+  // tab to One Piece on the third letter of "Poliwag" and "Stoutland".
+  ["po", "sto", "pop", "stop", "ebo", "opo"].forEach(no);
+  yes("po1");   // ...but one typed digit and the repair is back on
 
   group("Set code vs card number — the OP17 trap");
   eq(OP.parseQuery("op17").setCode, "OP17", `"op17" is a SET, not card OP01-007`);
@@ -149,6 +173,16 @@
      `got ${q("op17 bbx")}`);
   ok(OP.parseQuery("op17 bbx").sealed, `bbx marks the query sealed`);
   ok(OP.parseQuery("st21 sd").sealed, `sd (starter deck) does too`);
+
+  // The two branches of buildQuery used to disagree about this: a sealed search
+  // sent the set's whole name while a card search kept one word of the
+  // character's. Whatever names the thing you are pricing now goes in whole,
+  // whichever branch builds the query.
+  group("Names are never trimmed — card or set");
+  ok(/world's strongest warriors/i.test(q("op17 bbx")),
+     `a set's full name, every word of it`, `got ${q("op17 bbx")}`);
+  ok(q("charlotte katakuri op06-069").indexOf("charlotte katakuri") !== -1,
+     `a character's full name, every word of it`, `got ${q("charlotte katakuri op06-069")}`);
 
   // ── Catalogue ──────────────────────────────────────────────
   group("Catalogue (cards_op.js)");

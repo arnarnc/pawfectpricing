@@ -235,6 +235,26 @@
       background: var(--purple);
       color: #fff;
     }
+    /* Said out loud when the app moves the tab for you. A switch you did not
+       ask for has to announce itself, or the next thing you type lands in a
+       mode you did not know you were in — which is the exact problem the
+       switching was added to fix. */
+    .game-note {
+      font-size: 11.5px;
+      color: var(--purple);
+      font-weight: 600;
+      letter-spacing: .01em;
+      opacity: 0;
+      max-height: 0;
+      overflow: hidden;
+      /* The parent is a flex column with an 8px gap, which a zero-height child
+         still earns — so hidden, this row would silently pad the space between
+         the switch and the box. The negative margin gives that 8px back, and
+         goes to 0 when the note appears. */
+      margin-top: -8px;
+      transition: opacity .2s ease, max-height .2s ease, margin-top .2s ease;
+    }
+    .game-note.show { opacity: 1; max-height: 20px; margin-top: 0; }
 
     .input-wrap { position: relative; }
     .input-wrap input[type="text"] {
@@ -977,6 +997,7 @@
       <button type="button" data-game="pkmn" onclick="setGame('pkmn')">Pokémon</button>
       <button type="button" data-game="op" onclick="setGame('op')">One Piece</button>
     </div>
+    <div class="game-note" id="gameNote" aria-live="polite"></div>
     <div class="input-wrap">
       <input type="text" id="cardInput"
         placeholder="e.g. Charizard 125/094 · try etb or bbx too"
@@ -1016,7 +1037,7 @@
 <script src="money.js?v=1"></script>
 <script src="recents.js?v=7"></script>
 <script src="compsearch.js?v=1"></script>
-<script src="onepiece.js?v=3"></script>
+<script src="onepiece.js?v=4"></script>
 <script src="cards.js"></script>
 <script src="cards_jp.js"></script>
 <script src="cards_op.js"></script>
@@ -1033,8 +1054,20 @@
   // search: a Pokemon card is found by "name + 125/197" and a One Piece card by
   // its ID alone ("OP01-016"), the shorthand collides ("sp" is a One Piece
   // printing, "hp" is a Pokemon condition), and the catalogues are separate
-  // files. So the mode is explicit and sticky rather than guessed from the
-  // input — a guess that flips mid-word would be worse than no guess at all.
+  // files. So the mode is explicit and sticky — and, since detectGame below, it
+  // also MOVES when what you typed is unmistakably the other game.
+  //
+  // The old rule here was "never guess; a guess that flips mid-word would be
+  // worse than no guess at all", and the first half of that is still true: the
+  // flipping is the failure, not the guessing. What it missed is that a sticky
+  // tab has a failure of its own, and in practice a louder one — you switch
+  // tabs, get distracted, and price a Charizard through the One Piece parser,
+  // which does not error, it just quietly searches for something else. A wrong
+  // mode you cannot see beats a right mode you did not ask for.
+  //
+  // detectGame is built so the flip cannot happen: it answers only when the
+  // evidence is decisive, and says "" — leave the tab where it is — for
+  // everything else, which is most of what a half-typed word looks like.
   // Everything game-specific hangs off this one variable; see onepiece.js for
   // the One Piece half.
   const PLACEHOLDERS = {
@@ -1049,35 +1082,170 @@
     document.getElementById("cardInput").placeholder = PLACEHOLDERS[game];
   }
 
-  function setGame(g) {
+  function setGame(g, opts) {
     if (g === game) return;
     game = g;
     localStorage.setItem("game", g);
     applyGame();
     lastSuggestSig = "";   // the dropdown is about to mean something else
-    // The box is emptied on the way across. Whatever is in it was written in
-    // the other game's language, and the two do not overlap: "Charizard
-    // 125/094" is not a One Piece card and "OP01-016 aa" parses to nothing in
-    // Pokemon, so leaving it there only produces a dead search and a dropdown
-    // with nothing in it. Worse, the halves that DO survive mean something
-    // else -- "sp" is a One Piece printing and a Pokemon set -- so a leftover
-    // query can come back looking valid while pointing at the wrong card.
-    // Switching games is starting a new search; start it from an empty box.
+    // Tapping a tab empties the box on the way across. Whatever is in it was
+    // written in the other game's language, and the two do not overlap:
+    // "Charizard 125/094" is not a One Piece card and "OP01-016 aa" parses to
+    // nothing in Pokemon, so leaving it there only produces a dead search and a
+    // dropdown with nothing in it. Worse, the halves that DO survive mean
+    // something else -- "sp" is a One Piece printing and a Pokemon set -- so a
+    // leftover query can come back looking valid while pointing at the wrong
+    // card. Tapping a tab is starting a new search; start it from an empty box.
+    //
+    // keepInput inverts exactly that reasoning, and only an auto-switch passes
+    // it: there the text is not left over from the old game, it is the entire
+    // reason the tab moved. Clearing it would delete the thing that was right.
+    if (opts && opts.keepInput) return;
     clearInput();          // clears the box, status, suggestions and lastCard
+  }
+
+  // ── Which game did you just type? ─────────────────────────
+  // The tab is a preference; what is in the box is evidence. When the evidence
+  // is unambiguous the evidence wins — you should not have to remember which
+  // tab you left yourself on before a search can be correct.
+  //
+  // "Unambiguous" is the whole design. Every rule below is one-sided by
+  // construction: a signal counts only when it exists in ONE game and cannot
+  // exist in the other, and the moment both sides light up — or neither does —
+  // the answer is "" and the tab stays put. That is what stops it flipping
+  // mid-word. "cha" begins Charizard and Charlotte Katakuri, so it says nothing
+  // at all; a name only decides once enough of it has been typed to belong to
+  // one game.
+  //
+  // Two tiers, structure first:
+  //
+  //   shape   "125/197" is how a Pokemon card is pinned, "OP01-016" how a One
+  //           Piece one is, and neither game writes the other's. One of them
+  //           alone is proof — which is why "op01" moves the tab before a name
+  //           has been typed at all.
+  //   words   Every name in either catalogue, split into words. A word votes
+  //           only if it prefixes a name in one catalogue and no name in the
+  //           other, so "luffy" and "charizard" decide while the hundreds of
+  //           words the two games share ("dark", "gold", "king") stay silent.
+  //
+  // Deliberately NOT signals: printing and condition shorthand. "aa", "alt",
+  // "sp", "nm", "psa" are typed in both games or mean different things in each,
+  // and a switch driven by "sp" would be the flip-mid-word failure exactly.
+  const GAME_NOISE = new Set([
+    // graders, grades, condition
+    "psa","bgs","cgc","sgc","tag","ace","gem","mint","near","raw","graded","played",
+    "lightly","moderately","heavily","damaged",
+    // printing and marketing vocabulary either game can carry
+    "holo","holofoil","foil","reverse","rev","promo","rare","art","alt","altart",
+    "alternate","full","fullart","secret","edition","card","cards","parallel",
+    "manga","comic","special","treasure","pandaman","panda","textured","pirate",
+    "serial","winner","judge","wanted","base","reg","regular","normal","plain",
+    "english","japanese","jpn","eng","stamped","signed","error","misprint",
+    // sealed product
+    "sealed","box","booster","elite","trainer","deck","starter","case","display",
+    "carton","pack","packs","bundle","tin","collection",
+    // english filler that is nobody's name
+    "the","and","for","are","was","his","her","its","one","two","all","not","but",
+    "you","your","with","from","into","that","this","they","them","who","what",
+    "when","will","new","vol","set","sets","mid","out","off"
+  ]);
+
+  // Every distinct name-word in each catalogue, sorted, built once. Sorted
+  // rather than hashed because the question asked of it is "does any name START
+  // with this?" — you are being matched while still typing — and a binary
+  // search answers that against the words themselves, with no prefix table to
+  // build or hold in memory.
+  let gameWords = null;
+  function buildGameWords() {
+    if (gameWords) return gameWords;
+    const collect = feed => {
+      const seen = new Set();
+      feed(n => String(n || "").toLowerCase().split(/[^0-9a-zà-ÿ]+/).forEach(w => {
+        if (w.length >= 3 && !/\d/.test(w) && !GAME_NOISE.has(w)) seen.add(w);
+      }));
+      return [...seen].sort();
+    };
+    gameWords = {
+      pkmn: collect(add => {
+        ALL_NAMES.forEach(add);
+        if (typeof CARDS    !== "undefined") CARDS.forEach(c => add(c[5]));
+        if (typeof CARDS_JP !== "undefined") CARDS_JP.forEach(c => add(c[5]));
+      }),
+      op: collect(add => {
+        if (typeof CARDS_OP !== "undefined") CARDS_OP.forEach(c => add(c[6]));
+      })
+    };
+    return gameWords;
+  }
+
+  // Does any word in the sorted list start with `tok`?
+  function hasNamePrefix(sorted, tok) {
+    let lo = 0, hi = sorted.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (sorted[mid] < tok) lo = mid + 1; else hi = mid;
+    }
+    return lo < sorted.length && sorted[lo].startsWith(tok);
+  }
+
+  // "pkmn", "op", or "" for "the box does not say". Never throws.
+  function detectGame(raw) {
+    const text = String(raw || "").trim().toLowerCase();
+    if (!text) return "";
+
+    const pkShape = /\d+\s*\/\s*\d+/.test(text);
+    const opShape = !!(window.OnePiece && OnePiece.hasCode(text));
+    if (pkShape !== opShape) return pkShape ? "pkmn" : "op";
+    if (pkShape) return "";        // both at once: a query neither game owns
+
+    // Naming the game outright settles it before any catalogue is consulted.
+    let pk = /\bpok[eé]mon\b|\b(etb|gx|vmax|vstar)\b/.test(text);
+    let op = /\bone\s*piece\b/.test(text);
+    const w = buildGameWords();
+    text.split(/[^0-9a-zà-ÿ]+/).forEach(tok => {
+      if (tok.length < 3 || /\d/.test(tok) || GAME_NOISE.has(tok)) return;
+      const inOp = hasNamePrefix(w.op, tok), inPk = hasNamePrefix(w.pkmn, tok);
+      if (inOp !== inPk) { if (inOp) op = true; else pk = true; }
+    });
+    return op === pk ? "" : (op ? "op" : "pkmn");
+  }
+
+  const GAME_LABEL = { pkmn: "Pokémon", op: "One Piece" };
+  let gameNoteTimer = null;
+
+  // Move the tab if the box says so, and say so. update() carries straight on
+  // afterwards and rebuilds the links, badges and dropdown under the new game.
+  function autoSwitchGame(value) {
+    const g = detectGame(value);
+    if (!g || g === game) return;
+    setGame(g, { keepInput: true });
+    const note = document.getElementById("gameNote");
+    if (!note) return;
+    note.textContent = "Switched to " + GAME_LABEL[g] + " — that's how this one reads";
+    note.classList.add("show");
+    clearTimeout(gameNoteTimer);
+    gameNoteTimer = setTimeout(() => note.classList.remove("show"), 4000);
   }
 
   // A comp row, a saved set and a recent search are all just the text that was
   // typed, and the two games read that text differently — "OP01-016 aa" means
   // nothing to the Pokemon parser. Rows added from now on record their game;
-  // older rows (and anything synced from a device on an earlier build) are read
-  // off the label instead, which is reliable because a One Piece query is
-  // exactly the thing that carries a full card ID.
+  // older rows (and anything synced from a device on an earlier build) have to
+  // be read off the label instead.
+  //
+  // Which is the same question detectGame answers for the live box, so it is
+  // the same code — a row should file itself under the game it would search
+  // under if you retyped it. It used to ask a narrower question ("does this
+  // carry a full card ID?"), which quietly filed two whole categories of One
+  // Piece search under Pokemon: sealed searches, which carry a set code and no
+  // card ("op17 bbx"), and anything searched by character alone ("luffy").
+  // Those rows then vanished from the One Piece dropdown, where they belonged.
+  //
+  // "" — the box does not say — settles as Pokemon, which is the default game
+  // and what an unlabelled old row is overwhelmingly likely to be.
   function gameOf(label, stored) {
     if (stored === "op" || stored === "pkmn") return stored;
-    // The whole label, not token by token: a One Piece ID is routinely typed
-    // with a space ("op01 003"), and neither half carries a card ID on its own.
-    // OnePiece.parseQuery rejoins it, so it is the only thing that can tell.
-    return OnePiece.parseQuery(label || "").code ? "op" : "pkmn";
+    return detectGame(label || "") || "pkmn";
   }
 
   // ── Auction toggle ────────────────────────────────────────
@@ -1089,6 +1257,10 @@
     CompSearch.setCanon(canonNum);
     OnePiece.setCanon(canonNum);
     applyGame();
+    // Both catalogues, sliced into name-words for detectGame. ~31k rows, done
+    // once, and deferred so it lands after first paint instead of stalling the
+    // first keystroke — which is the only moment the user would ever feel it.
+    setTimeout(buildGameWords, 0);
     document.getElementById("excludeAuctions").checked = excludeAuctions;
     applyDesktopMode();
     // Restore the last typed card so a refresh doesn't lose it.
@@ -1354,6 +1526,9 @@
     const statusEl = document.getElementById("status");
     saveLastCard(document.getElementById("cardInput").value);
     if (!value) { statusEl.innerHTML = ""; closeAll(); return; }
+    // First, because everything below is game-specific: the URL builder, the
+    // print badge and the dropdown all ask `game` what they are.
+    autoSwitchGame(value);
     const urls = buildUrls(value);
     document.getElementById("worldwideSoldLink").href  = urls.worldwideSold;
     document.getElementById("auSoldLink").href         = urls.auSold;

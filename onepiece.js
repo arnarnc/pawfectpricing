@@ -6,9 +6,8 @@
 // set. A One Piece card is pinned by its ID alone -- "OP01-016" carries the set
 // (OP01) and the card (016) in one token, and no other card in the game shares
 // it. The name is still worth sending -- plenty of sellers title on the
-// character and never type an ID at all -- but it is sent SHORT, one word, for
-// the same reason: eBay ANDs every word, so "Monkey D Luffy" quietly deletes
-// every listing that just said "Luffy".
+// character and never type an ID at all -- and it is sent WHOLE, exactly as it
+// was typed.
 //
 // What the ID does not pin down is the printing, and that is where the money
 // is. OP01-016 exists as a plain Rare (a couple of dollars), as an Alternate
@@ -22,8 +21,9 @@
 // ("-alt -manga -parallel"). Both guesses cost real comps: a seller who titled
 // the card "Alternate Art" or mentioned "alt" anywhere in the title vanished.
 // So the rule now is: keep what was TYPED. Tags go in verbatim, the character
-// name goes in but trimmed to the one word eBay titles actually use ("luffy",
-// not "monkey.d.luffy"), and nothing is excluded.
+// name goes in verbatim, and nothing is excluded. Type "luffy" for the wide
+// net; type "monkey.d.luffy" for the narrow one. Which of those you want is a
+// decision only you can make, because only you can see the card.
 //
 // Depends on cards_op.js (CARDS_OP). Standalone and side-effect free otherwise.
 
@@ -215,6 +215,16 @@
       if (low.slice(0, f.length).replace(/0/g, "o") !== f) continue;
       var rest = low.slice(f.length).replace(/o/g, "0");
       if (!rest) return f;
+      // O's become zeroes only when at least one REAL digit was typed. Without
+      // that guard the repair invents IDs out of ordinary words: "po" reads as
+      // the promo card P-000 and "sto" as the set ST00, because every letter
+      // after the family happens to be an O. Harmless while you are mid-word
+      // inside a One Piece search -- but the game detector asks this same
+      // question of every keystroke in the box, and "Poliwag" and "Stoutland"
+      // were bouncing the tab to One Piece on their third character and back
+      // on their fourth. One typed digit is what separates a mistyped ID from
+      // a word that merely starts like one.
+      if (!/[0-9]/.test(low)) continue;
       var m = /^[-.]?(\d{1,5})(?:[-.](\d{1,4}))?$/.exec(rest);
       if (!m) continue;
       return f + m[1] + (m[2] ? "-" + m[2] : "");
@@ -249,25 +259,56 @@
     return out.join(" ");
   }
 
-  // ── Character names ───────────────────────────────────────
-  // eBay titles use the short, famous form of a name, and every extra word is
-  // listings lost: "Monkey D Luffy", "Monkey.D.Luffy" and "Luffy" are all in
-  // the wild, but only the last one appears in all three. So a name is trimmed
-  // to its final real word -- "monkey.d.luffy" -> "luffy", "trafalgar law" ->
-  // "law", "charlotte katakuri" -> "katakuri" -- stepping back over single
-  // letters, which are initials and never the word a seller titled on.
-  var TREAT_FILLER = /^(art|rare|foil|card|parallel|edition)$/;
-
-  function shortName(words) {
-    var subs = [];
-    (words || []).forEach(function (w) {
-      String(w).split(/[^0-9a-zÀ-￿]+/i).forEach(function (sub) {
-        if (sub) subs.push(sub);
-      });
-    });
-    while (subs.length > 1 && subs[subs.length - 1].length < 2) subs.pop();
-    return subs.length ? subs[subs.length - 1] : "";
+  // Does this text carry a real One Piece card ID or set code?
+  //
+  // parseQuery().code answers a looser question on purpose: inside a One Piece
+  // search, anything ID-SHAPED is an ID, because nothing else in the box looks
+  // like one. Asked from outside -- by the game detector, which has to decide
+  // whether the box is even a One Piece search -- shape alone is not enough:
+  // a Pokemon promo number is spelled "SWSH050", which is letters-then-digits
+  // and therefore ID-shaped, and mistaking it for a set code would drag the app
+  // out of Pokemon mid-word.
+  //
+  // The set family is what separates them, and repairCode already checks the
+  // typed family against the ones the catalogue actually ships (OP, ST, EB,
+  // PRB, P). Nothing in Pokemon is spelled that way, so a token that clears it
+  // AND carries a number is a One Piece code and not a coincidence.
+  function hasCode(raw) {
+    var parts = normalizeIds(String(raw == null ? "" : raw).toLowerCase().replace(/[,#]/g, " "))
+      .split(/\s+/);
+    for (var i = 0; i < parts.length; i++) {
+      var fixed = repairCode(parts[i]);
+      if (!fixed) continue;
+      var p = splitCode(fixed);
+      // A bare family ("op", "st") is not a code -- it is two letters that
+      // happen to lead one, and on their own they name nothing.
+      if (p && (p.card || p.set)) return true;
+    }
+    return false;
   }
+
+  // ── Character names ───────────────────────────────────────
+  // The name goes to eBay as it was typed, whole.
+  //
+  // It used to be trimmed to its final real word -- "monkey.d.luffy" ->
+  // "luffy", "trafalgar law" -> "law" -- on the theory that eBay titles use the
+  // short famous form and every extra word is listings lost. That theory is
+  // right about which search is WIDEST and wrong about whose decision it is.
+  // Two costs, one of them invisible:
+  //
+  //   it overrode you   The name is the one part of the query typed out in
+  //                     full, in a box whose whole promise is that the search
+  //                     is what you typed. Deleting most of it, silently, is
+  //                     the app disagreeing about the card in your hand -- and
+  //                     you are the one holding it.
+  //   it contradicted   A sealed search sends the set's whole name ("The
+  //   the other half    World's Strongest Warriors"), never one word of it. Two
+  //                     branches of one function, two answers to "how much of
+  //                     the name do we keep".
+  //
+  // So: nothing is trimmed anywhere now. Typing "luffy" still gets the wide
+  // net, because that is still what you typed.
+  var TREAT_FILLER = /^(art|rare|foil|card|parallel|edition)$/;
 
   // ── Query parsing ─────────────────────────────────────────
   // Turns whatever was typed into the parts that mean something:
@@ -336,16 +377,17 @@
   // seller plausibly typed. What comes out is, in order:
   //
   //   the card ID          OP01-016      the one token that pins the card
-  //   the character name   luffy         trimmed to its last real word
+  //   the character name   monkey.d.luffy   whole, exactly as typed
   //   the printing tag     alt           exactly as it was typed, never expanded
   //   the language         english / japanese
   //   anything else typed  psa 10, nm    in the order it was typed
   //
-  // Nothing is excluded and nothing is spelled out. The name is kept even
-  // though the ID alone is unique: "OP01-016" is unique to the CARD, but plenty
-  // of sellers put the character and no ID in the title at all, and the ID is
-  // not what a buyer searched. Keeping one short name word costs the listings
-  // that spell the name differently, which after trimming is very few.
+  // Nothing is excluded, nothing is spelled out, nothing is trimmed. The name
+  // is kept even though the ID alone is unique: "OP01-016" is unique to the
+  // CARD, but plenty of sellers put the character and no ID in the title at
+  // all, and the ID is not what a buyer searched. How wide that net is stays in
+  // the typist's hands -- the same rule the sealed branch above already follows
+  // when it sends a set's full name.
   function buildQuery(raw) {
     var p = parseQuery(raw);
 
@@ -365,9 +407,7 @@
       if (/^[A-Z]+-/.test(p.code) && !/\d/.test(p.code.split("-")[0])) parts.push("one piece");
       parts.push(p.code);
     }
-    var nm = shortName(p.name);
-    if (nm) parts.push(nm);
-    parts = parts.concat(p.treatWords);
+    parts = parts.concat(p.name, p.treatWords);
     if (p.lang) parts.push(p.lang);
     parts = parts.concat(p.extras);
 
@@ -455,9 +495,8 @@
 
   // One catalogue row -> one dropdown row. `fill` is what lands back in the
   // search box when the row is picked: name first so the box stays readable,
-  // then the ID, then the shorthand for the printing. buildQuery drops the name
-  // again on the way to eBay, so a readable box and a tight search are not in
-  // conflict.
+  // then the ID, then the shorthand for the printing. All three reach eBay as
+  // they land here -- what the box says is what gets searched.
   function toRow(c) {
     var t = c[3] ? BY_CODE[c[3]] : null;
     var tag = t ? t.type[0] : "";
@@ -504,6 +543,7 @@
     setNameFor: setNameFor,
     canonCode: canonCode,
     looksLikeCode: looksLikeCode,
+    hasCode: hasCode,
     treatments: TREATMENTS,
     base: BASE
   };
