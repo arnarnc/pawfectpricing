@@ -20,10 +20,26 @@
 // ("aa" -> "alt art") and excluded words the plain print supposedly never has
 // ("-alt -manga -parallel"). Both guesses cost real comps: a seller who titled
 // the card "Alternate Art" or mentioned "alt" anywhere in the title vanished.
-// So the rule now is: keep what was TYPED. Tags go in verbatim, the character
-// name goes in verbatim, and nothing is excluded. Type "luffy" for the wide
-// net; type "monkey.d.luffy" for the narrow one. Which of those you want is a
-// decision only you can make, because only you can see the card.
+// So the rule is: keep what was TYPED. The character name goes in verbatim,
+// and most tags do too. Type "luffy" for the wide net; type "monkey.d.luffy"
+// for the narrow one. Which of those you want is a decision only you can make,
+// because only you can see the card.
+//
+// Two things are exceptions, and both are exceptions for the same reason --
+// they are the cases where ONE ID IS TWO CARDS, so nothing the typist can add
+// to the ID separates them:
+//
+//   the printing   the SP and the alternate art of a number are different
+//                  cards at different prices. Each asks for its own wording as
+//                  an OR-group and shuts the other out (see PRINT_SEARCH).
+//   the language   Bandai prints the same ID on the English and the Japanese
+//                  card, so both are on one results page. A foreign card asks
+//                  for its language; an English one excludes the others, and
+//                  never asks for "english" (see LANGS).
+//
+// eBay's any-of syntax -- (alt,alternate,parallel) -- is what makes those
+// affordable. A bare keyword is ANDed, so one spelling of a word sellers spell
+// three ways loses the other two; a group asks for all of them at once.
 //
 // Depends on cards_op.js (CARDS_OP). Standalone and side-effect free otherwise.
 
@@ -69,13 +85,99 @@
     type: ["base", "reg", "regular", "normal", "plain"]
   };
 
-  // Language, spelled out either way. "en" -> "english" and "jp" -> "japanese",
-  // both as positive keywords: this is the one place a word is ADDED rather
-  // than passed through, because "en"/"jp" are shorthand no seller ever types.
+  // Language, as eBay syntax rather than as a word.
+  //
+  // This is the one thing about One Piece that has no Pokemon equivalent, and
+  // it costs real money to get wrong: Bandai prints the SAME card ID on the
+  // English and the Japanese card. "OP01-016" returns both on one results
+  // page, at different prices, and no amount of ID precision separates them --
+  // only the language does.
+  //
+  // Two directions, and they are not symmetric:
+  //
+  //   a foreign card ASKS for its language, as every spelling sellers use.
+  //   an English card EXCLUDES the others, and never asks for "english".
+  //
+  // Asking for "english" is the same trap as asking for "parallel": plenty of
+  // genuine English listings never write the word ("One Piece TCG Romance Dawn
+  // OP01-003 Monkey D Luffy Leader" is a real title), so requiring it throws
+  // away most of the pool it was meant to clean up. Excluding the languages
+  // that DO get written is the half that works, because a Japanese seller
+  // nearly always says so somewhere in the title.
   var LANGS = {
     en: "english", eng: "english", english: "english",
-    jp: "japanese", jpn: "japanese", japanese: "japanese"
+    jp: "japanese", jpn: "japanese", jap: "japanese", japanese: "japanese",
+    cn: "chinese", chn: "chinese", china: "chinese", chinese: "chinese",
+    kr: "korean", kor: "korean", korea: "korean", korean: "korean"
   };
+
+  // What to ASK for, per language. An OR-group, not one spelling: eBay ANDs
+  // bare keywords, so demanding "japanese" loses everybody who wrote "JP" and
+  // demanding "jp" loses everybody who wrote it out.
+  var LANG_SEARCH = {
+    japanese: ["japanese", "jap", "jp", "jpn"],
+    chinese: ["chinese", "cn", "chn", "china"],
+    korean: ["korean", "kor", "kr", "korea"]
+  };
+
+  // What an English card excludes: every language above, in one negated group,
+  // plus the country words sellers write instead of the language ("From JAP",
+  // "Japan import"). One group rather than a dozen "-word" terms, which eBay
+  // accepts the same way it accepts a positive one.
+  var NOT_ENGLISH = ["japanese", "japan", "jap", "jp", "jpn", "nihongo",
+                     "chinese", "china", "cn", "chn",
+                     "korean", "korea", "kr", "kor",
+                     "indonesian", "indonesia"];
+
+  // eBay's any-of syntax: (alt,alternate,parallel). No spaces inside -- a
+  // space ends the group and the rest becomes separate ANDed keywords.
+  function orGroup(words) {
+    var list = (words || []).filter(Boolean);
+    if (!list.length) return "";
+    return list.length === 1 ? list[0] : "(" + list.join(",") + ")";
+  }
+
+  // The language part of a card query: a group to ask for, or a negated group
+  // that leaves the English pool standing. Never both, never "english".
+  function langTerms(lang) {
+    var want = String(lang || "").toLowerCase();
+    if (want && want !== "english" && LANG_SEARCH[want]) return orGroup(LANG_SEARCH[want]);
+    if (want && want !== "english") return want;
+    return "-" + orGroup(NOT_ENGLISH);
+  }
+
+  // How to ask for the two printings that share an ID and a price bracket.
+  //
+  // The SP and the Alternate Art of one card carry the SAME number, so a query
+  // that names neither prices one off the other -- and they are not close in
+  // value. Each side both asks for its own wording and shuts the other out:
+  //
+  //   alt   (alt,alternate,parallel) -sp   sellers spell the alt three ways and
+  //                                        agree on none of them; "parallel" is
+  //                                        Bandai's own word, "alternate" is the
+  //                                        one most titles actually use.
+  //   sp    sp                             requiring "sp" is already the whole
+  //                                        exclusion -- eBay ANDs, so an ordinary
+  //                                        alt listing cannot match it. Nothing
+  //                                        is subtracted here on purpose: an SP
+  //                                        is titled "SP Alt Art" as often as
+  //                                        "(SP)", so "-alt" would throw away
+  //                                        the SP listings it was aimed at.
+  var PRINT_SEARCH = {
+    AA: { ask: ["alt", "alternate", "parallel"], not: ["sp"] },
+    SP: { ask: ["sp"], not: [] }
+  };
+
+  // The printing part of a card query: the group for a printing that shares its
+  // ID with another, else the tag exactly as it was typed (the old rule, and
+  // still the right one for a treatment nothing else collides with).
+  function printTerms(p) {
+    var rule = p.treat ? PRINT_SEARCH[p.treat.code] : null;
+    if (!rule) return p.treatWords;
+    var out = [orGroup(rule.ask)];
+    if (rule.not.length) out.push("-" + orGroup(rule.not));
+    return out;
+  }
 
   // Sealed product shorthand. etb/bbx are already global in index.html; these
   // are the ones only One Piece has.
@@ -378,11 +480,16 @@
   //
   //   the card ID          OP01-016      the one token that pins the card
   //   the character name   monkey.d.luffy   whole, exactly as typed
-  //   the printing tag     alt           exactly as it was typed, never expanded
-  //   the language         english / japanese
+  //   the printing        (alt,alternate,parallel) -sp   for the two printings
+  //                        that share an ID; any other tag exactly as typed
+  //   the language        (japanese,jap,jp,jpn), or the negated group that
+  //                        leaves the English pool standing
   //   anything else typed  psa 10, nm    in the order it was typed
   //
-  // Nothing is excluded, nothing is spelled out, nothing is trimmed. The name
+  // Two things ARE excluded now, and both are exclusions the ID cannot make on
+  // its own: the other printing of a shared number (see PRINT_SEARCH) and the
+  // other languages of it (see LANGS). Everything else is still passed through
+  // as typed -- no tag is spelled out and no name is trimmed. The name
   // is kept even though the ID alone is unique: "OP01-016" is unique to the
   // CARD, but plenty of sellers put the character and no ID in the title at
   // all, and the ID is not what a buyer searched. How wide that net is stays in
@@ -407,13 +514,20 @@
       if (/^[A-Z]+-/.test(p.code) && !/\d/.test(p.code.split("-")[0])) parts.push("one piece");
       parts.push(p.code);
     }
-    parts = parts.concat(p.name, p.treatWords);
-    if (p.lang) parts.push(p.lang);
-    parts = parts.concat(p.extras);
+    parts = parts.concat(p.name, printTerms(p), p.extras);
 
     // Nothing recognisable was typed -- a free-text search this module has no
-    // business rewriting. Hand back exactly what was in the box.
+    // business rewriting. Hand back exactly what was in the box. Checked
+    // BEFORE the language goes on, or the empty query would come back as a
+    // page of exclusions and nothing to exclude them from.
     if (!parts.length) return String(raw || "");
+
+    // Every card query carries a language, typed or not: an untyped one means
+    // English, and for One Piece that is a claim about the card rather than a
+    // silence -- the Japanese print of this exact ID is on the same page, at a
+    // different price. It goes last so the words a title is matched on read
+    // first in the box.
+    parts.push(langTerms(p.lang));
 
     var seen = {};
     return parts.join(" ").split(/\s+/)

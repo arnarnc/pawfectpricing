@@ -62,7 +62,15 @@
   // as it actually behaves in the app rather than under the module's fallback.
   OP.setCanon(s => String(s == null ? "" : s).toLowerCase().replace(/(^|[^0-9])0+(\d)/g, "$1$2"));
 
-  const q = s => OP.buildQuery(s);
+  // Two readers of the same query. Every One Piece card query now ends in a
+  // language term -- a group to ask for, or the negated group an English card
+  // excludes -- and repeating that string in forty assertions about names and
+  // IDs would say nothing about names or IDs. `q` reads the query with the
+  // language term taken off; `qAll` reads it whole, and the language group
+  // below is the one that uses it.
+  const LANG_TERM = /\s*-?\((?:japanese|chinese|korean)[^)]*\)/g;
+  const qAll = s => OP.buildQuery(s);
+  const q = s => qAll(s).replace(LANG_TERM, "").replace(/\s+/g, " ").trim();
 
   // ── The query is what you typed ────────────────────────────
   group("The query stays close to what was typed");
@@ -139,14 +147,20 @@
 
   // ── Printings ──────────────────────────────────────────────
   group("Printing shorthand goes in exactly as typed");
-  eq(q("op01-016 alt"), "OP01-016 alt", `"alt" is NOT expanded to "alt art"`);
-  eq(q("op01-016 aa"), "OP01-016 aa", `nor is "aa"`);
-  eq(q("op09-001 sp"), "OP09-001 sp", `"sp", not "special card"`);
+  eq(q("op01-016 alt"), "OP01-016 (alt,alternate,parallel) -sp",
+     `an alt asks for all three spellings, and shuts the SP of the same ID out`);
+  eq(q("op01-016 aa"), "OP01-016 (alt,alternate,parallel) -sp", `"aa" is the same printing`);
+  eq(q("op09-001 sp"), "OP09-001 sp",
+     `an SP asks for "sp" and subtracts nothing -- requiring the word IS the exclusion`);
+  ok(q("op09-001 sp").indexOf("-alt") === -1,
+     `...and never "-alt": half the SP listings in the world are titled "SP Alt Art"`,
+     `got ${q("op09-001 sp")}`);
   eq(q("op11-118 tr"), "OP11-118 tr", `"tr" stays "tr"`);
   eq(q("op11-118 treasure"), "OP11-118 treasure", `"treasure", not "treasure rare"`);
-  eq(q("op01-016 alt art"), "OP01-016 alt art", `if you DO type "alt art", both words are kept`);
+  eq(q("op01-016 alt art"), "OP01-016 (alt,alternate,parallel) -sp",
+     `the filler after a tag is folded into the group, not ANDed onto it`);
   eq(q("op11-118 treasure rare"), "OP11-118 treasure rare", `same for a spelled-out rarity`);
-  eq(q("nami op01-016 alt art"), "OP01-016 nami alt art",
+  eq(q("nami op01-016 alt art"), "OP01-016 nami (alt,alternate,parallel) -sp",
      `the filler word after a tag is never mistaken for the character's name`);
   eq(q("op01-016 base"), "OP01-016",
      `"base" adds nothing — it used to add exclusions that ate real comps`);
@@ -154,15 +168,43 @@
   eq(OP.badge("op01-016"), "Base Print", `no tag means the plain print`);
   eq(OP.badge("luffy"), "", `no ID, no printing claim`);
 
-  group("Language is spelled out, both ways");
-  eq(q("op01-016 en"), "OP01-016 english", `en -> english`);
-  eq(q("op01-016 jp"), "OP01-016 japanese", `jp -> japanese`);
-  ok(q("op01-016 en").indexOf("-japanese") === -1,
-     `no negative keyword — excluding a word drops listings that merely mention it`,
-     `got ${q("op01-016 en")}`);
+  // ── Language ───────────────────────────────────────────────
+  // The one rule with no Pokemon equivalent: Bandai prints the SAME ID on the
+  // English and the Japanese card, so "OP01-016" returns both at two prices
+  // and only the language separates them.
+  group("Language: ask for a foreign one, exclude the others");
+  eq(qAll("op01-016 jp"), "OP01-016 (japanese,jap,jp,jpn)",
+     `jp asks for every spelling sellers use, not just the long one`);
+  eq(qAll("op01-016 japanese"), "OP01-016 (japanese,jap,jp,jpn)", `typed out, same group`);
+  eq(qAll("op01-016 cn"), "OP01-016 (chinese,cn,chn,china)", `cn -> the Chinese group`);
+  eq(qAll("op01-016 kr"), "OP01-016 (korean,kor,kr,korea)", `kr -> the Korean group`);
+  ok(qAll("op01-016 jp").indexOf("-(") === -1,
+     `a foreign card excludes nothing -- asking for its language already did that`,
+     `got ${qAll("op01-016 jp")}`);
+
+  const english = qAll("op01-016");
+  ok(/-\(japanese,/.test(english),
+     `no language typed means English, and English is a claim: the others go`,
+     `got ${english}`);
+  ["japan", "jap", "jp", "chinese", "cn", "korean", "kr"].forEach(w =>
+    ok(english.indexOf(w) !== -1, `"${w}" is in the excluded group`, `got ${english}`));
+  eq(qAll("op01-016 en"), english, `typing "en" says the same thing as saying nothing`);
+  ok(!/(^| )english( |$)/.test(english),
+     `...but "english" is never ASKED for: requiring it halves the comps and moves no
+      price, because plenty of genuine English titles never write the word`,
+     `got ${english}`);
+
+  // The whole point of the two groups sitting side by side.
+  ok(/-sp/.test(qAll("op01-016 alt")) && /-\(japanese/.test(qAll("op01-016 alt")),
+     `an English alt excludes the SP of its number AND every other language of it`,
+     `got ${qAll("op01-016 alt")}`);
+
+  group("A query with nothing in it is still handed back untouched");
+  eq(qAll(""), "", `an empty box searches nothing, not a page of exclusions`);
 
   group("Graders and conditions survive");
-  eq(q("PSA 10 Nami OP01-016 aa"), "OP01-016 nami aa psa 10", `grader, grade, name and tag all kept`);
+  eq(q("PSA 10 Nami OP01-016 aa"), "OP01-016 nami (alt,alternate,parallel) -sp psa 10",
+     `grader, grade, name and printing all kept`);
   eq(q("op01-016 nm"), "OP01-016 nm", `condition shorthand is left for index.html to expand`);
 
   group("Sealed products search the set NAME, not the code");
