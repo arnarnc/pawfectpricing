@@ -148,68 +148,122 @@
     return "-" + orGroup(NOT_ENGLISH);
   }
 
-  // How to ask for the two printings that share an ID and a price bracket.
+  // How to ask for a printing, and how to shut the other printings of the same
+  // number out.
   //
-  // The SP and the Alternate Art of one card carry the SAME number, so a query
-  // that names neither prices one off the other -- and they are not close in
-  // value. Each side both asks for its own wording and shuts the other out:
+  // A One Piece ID names a NUMBER, not a product. 957 of the catalogue's 2,795
+  // numbers carry a plain print and at least one other printing, and the other
+  // printing is not a near-miss -- OP01-016 Nami is a plain Rare, an alternate
+  // art, a manga art and an SP, at four prices spanning three orders of
+  // magnitude. So a query has to say which one it means, in both directions:
   //
-  //   alt   (alt,alternate,parallel) -sp   sellers spell the alt three ways and
-  //                                        agree on none of them; "parallel" is
-  //                                        Bandai's own word, "alternate" is the
-  //                                        one most titles actually use.
-  //   sp    sp                             requiring "sp" is already the whole
-  //                                        exclusion -- eBay ANDs, so an ordinary
-  //                                        alt listing cannot match it. Nothing
-  //                                        is subtracted here on purpose: an SP
-  //                                        is titled "SP Alt Art" as often as
-  //                                        "(SP)", so "-alt" would throw away
-  //                                        the SP listings it was aimed at.
-  //   base  -(alt,alternate,parallel,sp)   the third side of the same fact. A
-  //                                        card ID with no tag on it is the
-  //                                        PLAIN print -- that is what the badge
-  //                                        has always said -- and the plain
-  //                                        print is the cheap one, so a page
-  //                                        full of alts and SPs does not just
-  //                                        add noise, it prices a $3 card off a
-  //                                        $400 one. Both of the printings that
-  //                                        share the number go.
+  //   ask   the words a seller of THIS printing writes, as an OR-group,
+  //         because they spell it several ways and agree on none.
+  //   veto  the words to subtract when this printing is the SIBLING you are
+  //         not holding.
   //
-  // The exclusions the old build had, and why this is not them coming back: it
-  // subtracted "-alt -manga -parallel" from every query, tag or no tag, so a
-  // seller who merely mentioned one of those words anywhere in a title was
-  // struck out of searches those words had nothing to do with. This subtracts
-  // only on the base branch, only the two printings that answer to the same ID,
-  // and any tag at all turns it off.
+  // `ask` is empty where the printing has no word that is safe to demand, and
+  // then whatever was typed goes through instead -- the old rule. `veto` is
+  // empty in the same cases, which is the more important half: subtracting a
+  // word is subtracting listings, and a word that is merely COMMON does far
+  // more damage as an exclusion than it does good.
+  //
+  //   Full Art   "full" and "fa" are both unsafe. The phrase is everywhere in
+  //              TCG titles and the abbreviation is two letters.
+  //   Pirate Foil  "pirate" is a One Piece word before it is a printing --
+  //              Pirate King, pirate crew, the game's own marketing.
+  //
+  // Those two are the known gap: a plain print whose only sibling is a Full Art
+  // or a Pirate Foil gets no exclusion, because every word that would express
+  // it costs more than it saves. 160 numbers are in that position.
   var PRINT_SEARCH = {
-    AA: { ask: ["alt", "alternate", "parallel"], not: ["sp"] },
-    SP: { ask: ["sp"], not: [] }
+    // "parallel" is Bandai's own word, "alternate" is the one most titles use,
+    // "alt" catches "Alt Art" and the bare "ALT".
+    //
+    // altWording marks the one veto that cannot be pointed at another PRINTING,
+    // only at the plain print. Every non-base printing in the game gets called
+    // an "alt art" or a "parallel" by somebody -- an SP is titled "SP Alt Art"
+    // as often as "(SP)" -- so "-alt" aimed at a manga art or an SP throws away
+    // the listings it was aimed at. Aimed at the plain print it is exact: the
+    // plain print is the one card nobody describes that way.
+    AA:     { ask: ["alt", "alternate", "parallel"],
+              veto: ["alt", "alternate", "parallel"], altWording: true },
+    SP:     { ask: ["sp"], veto: ["sp"] },
+    MANGA:  { ask: ["manga", "comic"], veto: ["manga", "comic"] },
+    TR:     { ask: ["treasure", "tr"], veto: ["treasure"] },
+    TF:     { ask: ["textured"], veto: ["textured"] },
+    PAN:    { ask: ["pandaman", "panda"], veto: ["pandaman", "panda"] },
+    SERIAL: { ask: ["serial"], veto: ["serial"] },
+    WINNER: { ask: ["winner"], veto: ["winner"] },
+    JR:     { ask: ["judge"], veto: ["judge"] },
+    WANTED: { ask: ["wanted"], veto: ["wanted"] },
+    FA:     { ask: [], veto: [] },
+    PF:     { ask: [], veto: [] },
+    BASE:   { ask: [], veto: [] }
   };
 
-  // What a card with no printing tag excludes. Not "manga" and not the rest of
-  // TREATMENTS: those are rare enough that a listing mentioning one is usually
-  // a comparison in the title rather than the card, and each word subtracted is
-  // real comps gone. Alt and SP are the two that genuinely flood the page.
-  var NOT_BASE = ["alt", "alternate", "parallel", "sp"];
+  // Vetoes come out in this order whatever order the catalogue lists the
+  // printings in, so one card always produces one query. TREATMENTS is the
+  // order the printings are declared in at the top of the file.
+  var VETO_ORDER = TREATMENTS.map(function (t) { return t.code; });
 
-  // The printing part of a card query: the group for a printing that shares its
-  // ID with another, the base print's exclusions when no printing was named, or
-  // the tag exactly as it was typed (the old rule, and still the right one for a
-  // treatment nothing else collides with).
+  // What to exclude when the catalogue cannot say which printings a number has
+  // -- an ID it does not carry, or cards_op.js not loaded yet. The two that
+  // share a number most often, and between them the two the plain print is
+  // most often mispriced against.
+  var FALLBACK_SIBLINGS = ["AA", "SP"];
+
+  // Which printings actually exist for a card ID, or null when the catalogue
+  // has no opinion. Built once, lazily, and never cached from an empty
+  // catalogue -- cards_op.js may simply not have loaded yet.
   //
-  // The base exclusions need a card ID to be about anything. Without one the
-  // box is a free-text search on a character's name -- the badge stays blank
-  // there for the same reason -- and nothing has claimed a printing to exclude
-  // the others from.
-  function printTerms(p) {
-    var rule = p.treat ? PRINT_SEARCH[p.treat.code] : null;
-    if (rule) {
-      var out = [orGroup(rule.ask)];
-      if (rule.not.length) out.push("-" + orGroup(rule.not));
-      return out;
+  // This is what makes the exclusions affordable. A blanket "-(alt,...,manga,
+  // treasure,...)" on every plain print would subtract six words from the 511
+  // numbers whose only sibling is an alternate art, and every one of those
+  // words is listings gone for a card that has no manga print to be confused
+  // with. Asking the catalogue means a query excludes exactly the printings
+  // that exist to be excluded.
+  var siblingIndex = null;
+  function treatmentsFor(code) {
+    if (!code) return null;
+    if (!siblingIndex) {
+      var all = rows();
+      if (!all.length) return null;
+      siblingIndex = {};
+      all.forEach(function (r) {
+        var id = String(r[1] || "").toUpperCase();
+        (siblingIndex[id] = siblingIndex[id] || {})[r[3] || "BASE"] = 1;
+      });
     }
-    if (p.treatWords.length) return p.treatWords;
-    return p.code ? ["-" + orGroup(NOT_BASE)] : [];
+    var found = siblingIndex[String(code || "").toUpperCase()];
+    return found ? Object.keys(found) : null;
+  }
+
+  // The printing part of a card query: what this printing is called, then what
+  // the other printings of its number are called, subtracted.
+  //
+  // A query with no card ID gets neither. The box is then a free-text search on
+  // a character's name, nothing has claimed a printing, and there is no number
+  // for the printings to be siblings OF -- which is the same reason the badge
+  // shows nothing there.
+  function printTerms(p) {
+    if (!p.code) return p.treatWords;
+    var asked = p.treat ? p.treat.code : "BASE";
+    var rule = PRINT_SEARCH[asked] || { ask: [], veto: [] };
+
+    var out = rule.ask.length ? [orGroup(rule.ask)] : p.treatWords.slice();
+
+    var siblings = treatmentsFor(p.code) || FALLBACK_SIBLINGS;
+    var words = [], seen = {};
+    VETO_ORDER.forEach(function (code) {
+      if (code === asked || siblings.indexOf(code) === -1) return;
+      var other = PRINT_SEARCH[code];
+      if (!other || !other.veto.length) return;
+      if (other.altWording && asked !== "BASE") return;
+      other.veto.forEach(function (w) { if (!seen[w]) { seen[w] = 1; words.push(w); } });
+    });
+    if (words.length) out.push("-" + orGroup(words));
+    return out;
   }
 
   // Sealed product shorthand. etb/bbx are already global in index.html; these

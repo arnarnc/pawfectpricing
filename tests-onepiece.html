@@ -62,19 +62,26 @@
   // as it actually behaves in the app rather than under the module's fallback.
   OP.setCanon(s => String(s == null ? "" : s).toLowerCase().replace(/(^|[^0-9])0+(\d)/g, "$1$2"));
 
-  // Three readers of the same query. Every One Piece card query now ends in the
-  // two exclusions that a card ID cannot make on its own -- the languages that
-  // share the ID, and (when no printing was named) the printings that share it
-  // -- and repeating those strings in forty assertions about names and IDs
-  // would say nothing about names or IDs. `q` reads the query with both taken
-  // off; `qAll` reads it whole, and the groups below are the ones that use it.
+  // Three readers of the same query. Every One Piece card query now ends in
+  // exclusions a card ID cannot make on its own -- the printings that share the
+  // number, and the languages that share it -- and which printings those are
+  // depends on the card, because the catalogue is asked. Repeating that in
+  // forty assertions about names and IDs would say nothing about names or IDs.
+  //
+  //   q       what was asked for, with every exclusion stripped
+  //   qLang   the same, but the language kept
+  //   qPrint  the same, but the printing exclusions kept
+  //   qAll    the query whole
+  //
+  // The language term is stripped first, so what is left to strip is exactly
+  // the printing vetoes.
   const LANG_TERM = /\s*-?\((?:japanese|chinese|korean)[^)]*\)/g;
-  const BASE_TERM = /\s*-\(alt,alternate,parallel,sp\)/g;
+  const VETO_TERM = /\s*-(?:\([^)]*\)|[a-z]+)/g;
   const qAll = s => OP.buildQuery(s);
-  const q = s => qAll(s).replace(LANG_TERM, "").replace(BASE_TERM, "")
+  const qLang = s => qAll(s).replace(VETO_TERM, "").replace(/\s+/g, " ").trim();
+  const qPrint = s => qAll(s).replace(LANG_TERM, "").replace(/\s+/g, " ").trim();
+  const q = s => qAll(s).replace(LANG_TERM, "").replace(VETO_TERM, "")
                         .replace(/\s+/g, " ").trim();
-  // ...and one that keeps the language, for the group that is about it.
-  const qLang = s => qAll(s).replace(BASE_TERM, "").replace(/\s+/g, " ").trim();
 
   // ── The query is what you typed ────────────────────────────
   group("The query stays close to what was typed");
@@ -151,49 +158,78 @@
 
   // ── Printings ──────────────────────────────────────────────
   group("Printing shorthand goes in exactly as typed");
-  eq(q("op01-016 alt"), "OP01-016 (alt,alternate,parallel) -sp",
-     `an alt asks for all three spellings, and shuts the SP of the same ID out`);
-  eq(q("op01-016 aa"), "OP01-016 (alt,alternate,parallel) -sp", `"aa" is the same printing`);
+  eq(q("op01-016 alt"), "OP01-016 (alt,alternate,parallel)",
+     `an alt asks for all three spellings sellers use, and agree on none of`);
+  eq(q("op01-016 aa"), "OP01-016 (alt,alternate,parallel)", `"aa" is the same printing`);
   eq(q("op09-001 sp"), "OP09-001 sp",
      `an SP asks for "sp" and subtracts nothing -- requiring the word IS the exclusion`);
   ok(q("op09-001 sp").indexOf("-alt") === -1,
      `...and never "-alt": half the SP listings in the world are titled "SP Alt Art"`,
      `got ${q("op09-001 sp")}`);
-  eq(q("op11-118 tr"), "OP11-118 tr", `"tr" stays "tr"`);
-  eq(q("op11-118 treasure"), "OP11-118 treasure", `"treasure", not "treasure rare"`);
-  eq(q("op01-016 alt art"), "OP01-016 (alt,alternate,parallel) -sp",
+  eq(q("op11-118 tr"), "OP11-118 (treasure,tr)",
+     `a treasure rare asks for both the word and the rarity code sellers print`);
+  eq(q("op11-118 treasure"), "OP11-118 (treasure,tr)", `typed out, same group`);
+  eq(q("op11-118 treasure rare"), "OP11-118 (treasure,tr)", `the filler folds in`);
+  eq(q("op01-016 alt art"), "OP01-016 (alt,alternate,parallel)",
      `the filler after a tag is folded into the group, not ANDed onto it`);
-  eq(q("op11-118 treasure rare"), "OP11-118 treasure rare", `same for a spelled-out rarity`);
-  eq(q("nami op01-016 alt art"), "OP01-016 nami (alt,alternate,parallel) -sp",
+  eq(q("nami op01-016 alt art"), "OP01-016 nami (alt,alternate,parallel)",
      `the filler word after a tag is never mistaken for the character's name`);
   eq(q("op01-016 base"), "OP01-016", `"base" asks for nothing — no seller writes it`);
+  eq(q("st01-006 fa"), "ST01-006 fa",
+     `a printing with no safe word to demand still goes in exactly as typed`);
 
-  // The third side of the shared-ID problem. A tagless ID is the PLAIN print,
-  // which is also the cheap one: leaving the alts and SPs on the page does not
-  // add noise, it prices a $3 card off a $400 one.
-  eq(qAll("op01-016").split(" ")[1], "-(alt,alternate,parallel,sp)",
-     `no tag means the plain print, so both printings that share the ID go`);
-  eq(qAll("op01-016 base"), qAll("op01-016"), `typing "base" says the same thing`);
-  eq(qAll("nami op01-016").indexOf("-(alt,alternate,parallel,sp)") !== -1, true,
+  // ── What the OTHER printings of the number cost ────────────
+  // An ID names a number, not a product: 957 of the catalogue's 2,795 numbers
+  // carry a plain print and at least one other printing. So the query says
+  // which one, and the catalogue says which others exist to be excluded.
+  group("The printings that share the number are excluded — the ones that exist");
+  // OP01-016 Nami is four cards: plain, alternate art, manga art, SP.
+  eq(qPrint("op01-016"), "OP01-016 -(alt,alternate,parallel,manga,comic,sp)",
+     `a tagless ID is the PLAIN print, so every other printing of it goes`);
+  eq(qPrint("op01-016 base"), qPrint("op01-016"), `typing "base" says the same thing`);
+  eq(qPrint("nami op01-016"), "OP01-016 nami -(alt,alternate,parallel,manga,comic,sp)",
      `a name alongside the ID does not change what printing was claimed`);
-  ok(qAll("op01-016 manga").indexOf("-(alt") === -1,
-     `ANY tag turns the base exclusions off — a manga art asks for itself`,
-     `got ${qAll("op01-016 manga")}`);
-  ok(qAll("op01-016 alt").indexOf("-(alt") === -1,
-     `...including the alt, which asks for those very words`,
-     `got ${qAll("op01-016 alt")}`);
-  ok(qAll("luffy").indexOf("-(alt") === -1,
-     `no ID, no claim: a free-text name search excludes no printing, same as the
-      badge showing nothing there`,
-     `got ${qAll("luffy")}`);
-  // The old build subtracted "-alt -manga -parallel" from EVERY query, tag or
-  // no tag, and a listing that merely mentioned one of those words was struck
-  // out of searches they had nothing to do with. That is the thing this must
-  // not become: only the base branch subtracts, and only these two printings.
-  ok(qAll("op01-016").indexOf("manga") === -1,
-     `"manga" is NOT excluded — rare enough that the word in a title is usually
-      a comparison, and every word subtracted is real comps gone`,
+
+  // The whole reason the catalogue is asked rather than a fixed list used.
+  // OP09-001 has one sibling, an alternate art. Subtracting "manga" there would
+  // be subtracting listings to protect against a card that does not exist.
+  eq(qPrint("op09-001"), "OP09-001 -(alt,alternate,parallel)",
+     `a number with only an alt art excludes only the alt art`);
+  ok(qPrint("op09-001").indexOf("manga") === -1,
+     `nothing is subtracted for a printing this number does not have`,
+     `got ${qPrint("op09-001")}`);
+
+  // Both directions of the same fact: a named printing excludes its siblings too.
+  eq(qPrint("op01-016 alt"), "OP01-016 (alt,alternate,parallel) -(manga,comic,sp)",
+     `an alt art is not comped against the manga art or the SP of its number`);
+  eq(qPrint("op01-016 manga"), "OP01-016 (manga,comic) -sp",
+     `...nor a manga art against the SP`);
+  eq(qPrint("op01-016 sp"), "OP01-016 sp -(manga,comic)", `...nor an SP against the manga`);
+  eq(qPrint("op16-098 alt"), "OP16-098 (alt,alternate,parallel) -sp",
+     `Yamato OP16-098 has an SP and no manga, and the query says exactly that`);
+
+  // The asymmetry that keeps this from eating the listings it aims at.
+  ["op01-016 manga", "op01-016 sp", "op11-118 tr"].forEach(t =>
+    ok(qAll(t).indexOf("-(alt") === -1 && !/-alt/.test(qAll(t)),
+       `"${t}" never subtracts the alt words`,
+       `got ${qAll(t)}`));
+  ok(/-\(alt,alternate,parallel/.test(qAll("op01-016")),
+     `...but the plain print does, because it is the one card nobody calls an alt`,
      `got ${qAll("op01-016")}`);
+
+  // The words that stay out of it. This is the old build's mistake in reverse:
+  // it subtracted "-alt -manga -parallel" from every query, and a listing that
+  // merely mentioned one of those words was struck out of searches they had
+  // nothing to do with.
+  ok(!/-.*full/.test(qAll("st01-006")) && !/-.*pirate/.test(qAll("st01-006")),
+     `a Full Art or Pirate Foil sibling is NOT excluded — "full" and "pirate" are
+      ordinary words in One Piece titles and cost more than they save`,
+     `got ${qAll("st01-006")}`);
+  eq(qPrint("luffy"), "luffy",
+     `no ID, no claim: a free-text name search excludes no printing, same as the
+      badge showing nothing there`);
+
+  group("Printing badges");
   eq(OP.badge("op01-016 aa"), "Alt Art", `the badge still names the printing`);
   eq(OP.badge("op01-016"), "Base Print", `no tag means the plain print`);
   eq(OP.badge("luffy"), "", `no ID, no printing claim`);
@@ -213,7 +249,8 @@
   ok(qAll("op01-016 jp").indexOf("-(japanese") === -1,
      `a foreign card excludes no LANGUAGE -- asking for its own already did that`,
      `got ${qAll("op01-016 jp")}`);
-  eq(qAll("op01-016 aa jp"), "OP01-016 (alt,alternate,parallel) -sp (japanese,jap,jp,jpn)",
+  eq(qAll("op01-016 aa jp"),
+     "OP01-016 (alt,alternate,parallel) -(manga,comic,sp) (japanese,jap,jp,jpn)",
      `printing and language are independent: a Japanese alt asks for both`);
 
   const english = qAll("op01-016");
@@ -229,15 +266,16 @@
      `got ${english}`);
 
   // The whole point of the two groups sitting side by side.
-  ok(/-sp/.test(qAll("op01-016 alt")) && /-\(japanese/.test(qAll("op01-016 alt")),
-     `an English alt excludes the SP of its number AND every other language of it`,
+  ok(/-\(manga,comic,sp\)/.test(qAll("op01-016 alt")) && /-\(japanese/.test(qAll("op01-016 alt")),
+     `an English alt excludes the other printings of its number AND every other
+      language of it`,
      `got ${qAll("op01-016 alt")}`);
 
   group("A query with nothing in it is still handed back untouched");
   eq(qAll(""), "", `an empty box searches nothing, not a page of exclusions`);
 
   group("Graders and conditions survive");
-  eq(q("PSA 10 Nami OP01-016 aa"), "OP01-016 nami (alt,alternate,parallel) -sp psa 10",
+  eq(q("PSA 10 Nami OP01-016 aa"), "OP01-016 nami (alt,alternate,parallel) psa 10",
      `grader, grade, name and printing all kept`);
   eq(q("op01-016 nm"), "OP01-016 nm", `condition shorthand is left for index.html to expand`);
 
