@@ -223,20 +223,38 @@
   // words is listings gone for a card that has no manga print to be confused
   // with. Asking the catalogue means a query excludes exactly the printings
   // that exist to be excluded.
-  var siblingIndex = null;
-  function treatmentsFor(code) {
+  var cardIndex = null;
+  function indexed(code) {
     if (!code) return null;
-    if (!siblingIndex) {
+    if (!cardIndex) {
       var all = rows();
       if (!all.length) return null;
-      siblingIndex = {};
+      cardIndex = {};
       all.forEach(function (r) {
         var id = String(r[1] || "").toUpperCase();
-        (siblingIndex[id] = siblingIndex[id] || {})[r[3] || "BASE"] = 1;
+        var e = cardIndex[id] || (cardIndex[id] = { codes: {}, words: {} });
+        e.codes[r[3] || "BASE"] = 1;
+        // The card's own name, word by word. Used to tell a printing tag from a
+        // character -- see `chooseTreatment`.
+        String(r[6] || r[0] || "").toLowerCase().split(/[^0-9a-z]+/)
+          .forEach(function (w) { if (w) e.words[w] = 1; });
       });
     }
-    var found = siblingIndex[String(code || "").toUpperCase()];
-    return found ? Object.keys(found) : null;
+    return cardIndex[String(code || "").toUpperCase()] || null;
+  }
+
+  function treatmentsFor(code) {
+    var e = indexed(code);
+    return e ? Object.keys(e.codes) : null;
+  }
+
+  // Is this word part of what the card is CALLED? "Vinsmoke Judge", "Mad
+  // Treasure" and "Hurry Up and Make Me the Pirate King!" are characters and
+  // card titles, and "judge", "treasure" and "pirate" are also printing tags.
+  // The catalogue settles it, because it knows the name that goes with the ID.
+  function isNameWord(code, word) {
+    var e = indexed(code);
+    return !!(e && e.words[word]);
   }
 
   // The printing part of a card query: what this printing is called, then what
@@ -246,7 +264,7 @@
   // a character's name, nothing has claimed a printing, and there is no number
   // for the printings to be siblings OF -- which is the same reason the badge
   // shows nothing there.
-  function printTerms(p) {
+  function printTerms(p, typed) {
     if (!p.code) return p.treatWords;
     var asked = p.treat ? p.treat.code : "BASE";
     var rule = PRINT_SEARCH[asked] || { ask: [], veto: [] };
@@ -257,13 +275,40 @@
     var words = [], seen = {};
     VETO_ORDER.forEach(function (code) {
       if (code === asked || siblings.indexOf(code) === -1) return;
+      // A printing named in the box is never subtracted, whichever of its
+      // spellings was typed: "op01-016 alt manga" asked for the alt, and
+      // subtracting "comic" there would still be arguing with the box.
+      if (p.treatCodes.indexOf(code) !== -1) return;
       var other = PRINT_SEARCH[code];
       if (!other || !other.veto.length) return;
       if (other.altWording && asked !== "BASE") return;
-      other.veto.forEach(function (w) { if (!seen[w]) { seen[w] = 1; words.push(w); } });
+      other.veto.forEach(function (w) {
+        // Never subtract a word that was TYPED. Two ways that happens, and both
+        // produce a query that argues with itself:
+        //
+        //   two tags     "op01-016 alt manga" -- only the first tag is asked
+        //                for, and without this the second is then EXCLUDED, so
+        //                the box says manga and the query says never manga.
+        //   the name     "Mad Treasure EB02-057" and "Vinsmoke Judge OP11-044"
+        //                are characters, not printings. A number of theirs that
+        //                also has a Treasure or Judge print would otherwise
+        //                subtract a word out of the card's own name, and eBay
+        //                would return an empty page for a card that sells fine.
+        //
+        // The typist wins either way: what is in the box is in the search.
+        if (typed && typed.indexOf(w) !== -1) return;
+        if (!seen[w]) { seen[w] = 1; words.push(w); }
+      });
     });
     if (words.length) out.push("-" + orGroup(words));
     return out;
+  }
+
+  // Every word the query itself is made of, lowercased and split the way a
+  // veto word would have to match. Built from what was TYPED rather than from
+  // the parse, so a word is protected whichever part of the parse claimed it.
+  function typedWords(raw) {
+    return String(raw == null ? "" : raw).toLowerCase().split(/[^0-9a-z]+/).filter(Boolean);
   }
 
   // Sealed product shorthand. etb/bbx are already global in index.html; these
@@ -323,6 +368,13 @@
   }
 
   function looksLikeCode(tok) { return !!splitCode(tok); }
+
+  // Is this a set family the game actually has? familyList() reads them off the
+  // catalogue, so a new set brings its own family along and nothing here has to
+  // be kept by hand.
+  function knownFamily(family) {
+    return familyList().indexOf(String(family || "").toLowerCase()) !== -1;
+  }
 
   // Printed form, which is also the form eBay sellers put in their titles.
   function canonCode(tok) {
@@ -511,16 +563,24 @@
   function parseQuery(raw) {
     var tokens = normalizeIds(String(raw == null ? "" : raw).toLowerCase().replace(/[,#]/g, " "))
       .split(/\s+/).filter(Boolean);
-    var out = { code: "", codeRaw: "", treat: null, treatWords: [], lang: "",
-                name: [], extras: [], sealed: false, setCode: "" };
+    var out = { code: "", codeRaw: "", treat: null, treatWords: [], treatCodes: [],
+                lang: "", name: [], extras: [], sealed: false, setCode: "" };
     var treatAt = -2;   // index of the last treatment token, for absorbing "art"
+    // Printing tags are collected rather than settled here: which typed token
+    // is really the printing cannot be known until the card ID has been read,
+    // and the ID may be typed last. `slots` keeps the name in typing order with
+    // a tag's place held open, so a tag that turns out to be part of the
+    // character's name drops back into the name where it was typed.
+    var tags = [], slots = [], current = null;
 
     tokens.forEach(function (tok, i) {
       if (BY_SHORTHAND[tok] && !(tok === "sd" || tok === "st")) {
         // A treatment tag. "sp" is both a treatment and nothing else, so it is
         // safe; "sd"/"st" are product words and are handled below.
-        if (!out.treat) out.treat = BY_SHORTHAND[tok];
-        if (!BY_SHORTHAND[tok].quiet) out.treatWords.push(tok);
+        current = { tok: tok, def: BY_SHORTHAND[tok], tokens: [tok],
+                    words: BY_SHORTHAND[tok].quiet ? [] : [tok] };
+        tags.push(current);
+        slots.push(current);
         treatAt = i;
         return;
       }
@@ -528,12 +588,28 @@
       // anything attached to the tag in front of it. Kept when it was typed --
       // the rule is to pass wording through, not to invent or delete it -- but
       // never allowed to fall through and be mistaken for a character's name.
-      if (TREAT_FILLER.test(tok) && i === treatAt + 1) {
-        out.treatWords.push(tok); treatAt = i; return;
+      if (TREAT_FILLER.test(tok) && i === treatAt + 1 && current) {
+        current.tokens.push(tok); current.words.push(tok); treatAt = i; return;
       }
-      if (LANGS[tok]) { out.lang = out.lang || LANGS[tok]; return; }
+      // Deferred for the same reason a printing tag is: "Swallow Bond en Avant
+      // OP15-096" is a card whose NAME contains "en", and until the ID has been
+      // read there is no way to know that. Read eagerly it cost twice over --
+      // the name lost a word, and a "jp" typed after it was ignored, because
+      // the name had already claimed the language slot as English.
+      if (LANGS[tok]) {
+        current = null;
+        slots.push({ lang: LANGS[tok], tok: tok, tokens: [tok] });
+        return;
+      }
       if (PRODUCTS[tok]) { out.sealed = true; out.extras.push(PRODUCTS[tok]); return; }
       var split = splitCode(tok);
+      // ID-SHAPED is not the same as an ID. "Deathly Poison Gas Bomb MH5" is a
+      // card name, and "MH5" is letters-then-digits, so the set-code branch
+      // below used to swallow it whole -- the query lost a word of the card's
+      // own name and gained nothing, because a set code is ignored once a card
+      // ID has been read. The set families are known (they come from the
+      // catalogue, see familyList), so the shape can be checked against them.
+      if (split && !knownFamily(split.family)) split = null;
       if (split) {
         // A full ID pins the card; a bare set code ("OP17") only pins the set,
         // which is what a sealed-product search is asking about. codeRaw keeps
@@ -545,11 +621,73 @@
         if (!split.card && !out.setCode) { out.setCode = canonCode(tok); return; }
       }
       if (GRADERS.test(tok) || CONDITIONS.test(tok) || /\d/.test(tok)) { out.extras.push(tok); return; }
-      out.name.push(tok);
+      slots.push(tok);
+    });
+
+    var chosen = chooseTreatment(tags, out.code);
+    slots.forEach(function (slot) {
+      if (typeof slot === "string") { out.name.push(slot); return; }
+      if (slot.lang) {
+        // A language word that is part of what the card is CALLED is not a
+        // claim about the print run. The first real one wins, as before.
+        if (isNameWord(out.code, slot.tok)) out.name.push(slot.tok);
+        else out.lang = out.lang || slot.lang;
+        return;
+      }
+      if (slot.isName) {
+        // Never a printing: it is what the card is called. Back into the name,
+        // in the position it was typed.
+        slot.tokens.forEach(function (t) { out.name.push(t); });
+        return;
+      }
+      if (slot === chosen) out.treat = slot.def;
+      slot.words.forEach(function (w) { out.treatWords.push(w); });
+      // Every printing named in the box, not just the one being searched for.
+      // Two printings cannot both be the card in your hand, so only one is
+      // asked for -- but one you NAMED is one the query must never subtract,
+      // and the word you typed is not always the word the veto table would use.
+      if (out.treatCodes.indexOf(slot.def.code) === -1) out.treatCodes.push(slot.def.code);
     });
 
     if (SEALED_RE.test(String(raw || ""))) out.sealed = true;
     return out;
+  }
+
+  // Which of the typed tags is the printing, once the card ID is known.
+  //
+  // Two questions the catalogue can answer and a bare token cannot:
+  //
+  //   is it a printing at all?   "Vinsmoke Judge OP06-062 aa" has two tag-shaped
+  //                              words in it and one of them is the character.
+  //                              Before this, "judge" won for being first, the
+  //                              "aa" was dropped, an alternate art was searched
+  //                              and badged as a Judge promo -- and the dropdown
+  //                              showed nothing at all, because it filtered the
+  //                              catalogue to Judge promos of a card with none.
+  //   which printing exists?     Between two real tags, the one the number
+  //                              actually carries wins.
+  //
+  // A number the catalogue does not know gets the old rule, first tag wins:
+  // guessing from an empty catalogue is how a half-typed ID starts rewriting
+  // the box. And when the catalogue knows the number but carries none of the
+  // printings typed, the first still wins -- the card in your hand outranks a
+  // catalogue of English prints, and `badge` says so rather than the search
+  // quietly disagreeing with you.
+  function chooseTreatment(tags, code) {
+    if (!tags.length) return null;
+    var have = treatmentsFor(code);
+    if (!have) return tags[0];
+
+    var real = [];
+    tags.forEach(function (t) {
+      if (isNameWord(code, t.tok)) t.isName = true;
+      else real.push(t);
+    });
+    if (!real.length) return null;
+    for (var i = 0; i < real.length; i++) {
+      if (have.indexOf(real[i].def.code) !== -1) return real[i];
+    }
+    return real[0];
   }
 
   // What recents and the saved-comp search need: the same {name, number, total}
@@ -591,7 +729,14 @@
     if (p.sealed && !p.code) {
       var setName = p.setCode ? setNameFor(p.setCode) : "";
       if (!setName) return String(raw || "");
-      return ["one piece", setName].concat(p.extras, p.name).join(" ").trim();
+      // The language belongs here for exactly the reason it belongs on a card.
+      // A Japanese booster box of a set is a different product from the English
+      // one at a different price, both are titled with the set's name, and the
+      // set name alone returns both -- and the box is the bigger ticket of the
+      // two, so getting it wrong costs more. It used to be dropped outright:
+      // "op17 bbx jp" searched the English box and threw the "jp" away.
+      return ["one piece", setName].concat(p.extras, p.name, [langTerms(p.lang)])
+        .join(" ").trim();
     }
 
     var parts = [];
@@ -601,7 +746,7 @@
       if (/^[A-Z]+-/.test(p.code) && !/\d/.test(p.code.split("-")[0])) parts.push("one piece");
       parts.push(p.code);
     }
-    parts = parts.concat(p.name, printTerms(p), p.extras);
+    parts = parts.concat(p.name, printTerms(p, typedWords(raw)), p.extras);
 
     // Nothing recognisable was typed -- a free-text search this module has no
     // business rewriting. Hand back exactly what was in the box. Checked
@@ -627,7 +772,20 @@
   function badge(raw) {
     var p = parseQuery(raw);
     if (!p.code) return "";
-    return p.treat ? p.treat.label : "Base Print";
+    var label = p.treat ? p.treat.label : "Base Print";
+    // The catalogue knows every English printing of every number, so it can say
+    // when the tag you typed names a card that does not exist -- "op09-001
+    // manga" when OP09-001 was only ever printed plain and alternate. The
+    // search still runs exactly as typed: the catalogue is English-only, the
+    // card in your hand is the authority, and a printing it has not heard of is
+    // a question rather than an answer. But an empty results page reads as "no
+    // sales" when it actually means "no such card", and those are worth
+    // telling apart.
+    if (p.treat && p.treat.code !== "BASE") {
+      var have = treatmentsFor(p.code);
+      if (have && have.indexOf(p.treat.code) === -1) return label + " — not on this number";
+    }
+    return label;
   }
 
   // ── Catalogue ─────────────────────────────────────────────
@@ -666,8 +824,26 @@
     var all = rows();
     if (!all.length) return null;
     var p = parseQuery(raw);
-    var cores = nameCores(p.name.join(" "));
     var keys = (p.codeRaw || p.setCode) ? codeKeys(p.codeRaw || p.setCode) : null;
+
+    var out = scan(all, nameCores(p.name.join(" ")), keys, p.treat, limit);
+
+    // Nothing found, and a printing tag was claimed: the tag may have been part
+    // of the character's name all along. `parseQuery` settles that from the
+    // catalogue, but only once a card ID has been typed -- and a name search is
+    // exactly the case where there is no ID yet. "vinsmoke judge" returned
+    // nothing at all, because "judge" filtered the catalogue to Judge promos of
+    // a card that has none, and the name was searched as "vinsmoke".
+    //
+    // Only ever a second pass, never the first, so a real tag still narrows the
+    // list: "nami op01-016 aa" does not fall back to every Nami printing.
+    if (!out.length && p.treatWords.length) {
+      out = scan(all, nameCores(p.name.concat(p.treatWords).join(" ")), keys, null, limit);
+    }
+    return out;
+  }
+
+  function scan(all, cores, keys, treat, limit) {
     if (!cores.length && !keys) return [];
 
     var out = [];
@@ -687,8 +863,8 @@
       }
       // A typed treatment filters the list rather than just colouring it: once
       // you have said "aa", the plain print is not what you are pricing.
-      if (p.treat && p.treat.code !== "BASE" && c[3] !== p.treat.code) continue;
-      if (p.treat && p.treat.code === "BASE" && c[3]) continue;
+      if (treat && treat.code !== "BASE" && c[3] !== treat.code) continue;
+      if (treat && treat.code === "BASE" && c[3]) continue;
       out.push(toRow(c));
     }
     return out;

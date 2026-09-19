@@ -298,6 +298,80 @@
   ok(q("charlotte katakuri op06-069").indexOf("charlotte katakuri") !== -1,
      `a character's full name, every word of it`, `got ${q("charlotte katakuri op06-069")}`);
 
+  // ── When a card's NAME is also a keyword ───────────────────
+  // Every one of these came out of sweeping all 5,070 catalogue prints through
+  // the query builder as the dropdown itself fills the box. They are not
+  // hypotheticals: each one is a card that was searched wrong.
+  group("A word in the card's name is not a printing, a language or a set");
+
+  // "Vinsmoke Judge" is a character. "judge" is also the Judge-promo tag, and
+  // it won for being typed first: the "aa" was dropped, and an alternate art
+  // was searched and badged as a Judge promo. OP.search had the same bug from
+  // the other end -- it filtered the catalogue to Judge promos of a card that
+  // has none and returned nothing. (The One Piece box lists recents rather than
+  // catalogue rows today, so that half was the module's API, not the screen.)
+  ok(/\(alt,alternate,parallel\)/.test(qAll("vinsmoke judge op06-062 aa")),
+     `"vinsmoke judge op06-062 aa" searches the ALTERNATE ART`,
+     `got ${qAll("vinsmoke judge op06-062 aa")}`);
+  ok(/vinsmoke judge/.test(qAll("vinsmoke judge op06-062 aa")),
+     `...and keeps the character's whole name`,
+     `got ${qAll("vinsmoke judge op06-062 aa")}`);
+  eq(OP.badge("vinsmoke judge op06-062 aa"), "Alt Art", `the badge names the real printing`);
+  eq(OP.badge("vinsmoke judge op06-062"), "Base Print", `with no tag, the plain print`);
+  ok((OP.search("vinsmoke judge", 6) || []).some(r => r.num === "OP06-062"),
+     `and a catalogue search finds the card before an ID has been typed`,
+     `got ${(OP.search("vinsmoke judge", 6) || []).map(r => r.num).join(", ") || "nothing"}`);
+
+  // Same shape, different table each time.
+  eq(q("mad treasure eb02-057"), "EB02-057 mad treasure",
+     `"Mad Treasure" is a character — EB02-057 has no Treasure printing`);
+  ok(/\bswallow bond en avant\b/.test(qAll("swallow bond en avant op15-096 jp")),
+     `"en" inside a card's name is not the English language`,
+     `got ${qAll("swallow bond en avant op15-096 jp")}`);
+  ok(/\(japanese,jap,jp,jpn\)/.test(qAll("swallow bond en avant op15-096 jp")),
+     `...and the "jp" typed after it is still heard — it used to be swallowed,
+      because the name had already claimed the language`,
+     `got ${qAll("swallow bond en avant op15-096 jp")}`);
+  ok(/mh5/.test(qAll("deathly poison gas bomb mh5 op03-038")),
+     `"MH5" in a card's name is not a set code — ID-shaped is not an ID`,
+     `got ${qAll("deathly poison gas bomb mh5 op03-038")}`);
+  ok(/pirate king/.test(qAll("hurry up and make me the pirate king! op14-097")),
+     `"pirate" in a card's name is not the Pirate Foil printing`,
+     `got ${qAll("hurry up and make me the pirate king! op14-097")}`);
+
+  group("A printing you named is never subtracted");
+  // Two tags is a contradiction the box cannot resolve -- only one of them is
+  // the card in your hand -- but it must never be resolved by excluding the
+  // other one. The query would then say never-manga while the box says manga.
+  eq(qPrint("op01-016 alt manga"), "OP01-016 (alt,alternate,parallel) -sp",
+     `"alt manga": the alt is searched, the manga is NOT excluded`);
+  eq(qPrint("op01-016 comic alt"), "OP01-016 (manga,comic) -sp",
+     `...whichever spelling was typed — "comic" protects the manga art too`);
+  eq(qPrint("op01-016 aa sp"), "OP01-016 (alt,alternate,parallel) -(manga,comic)",
+     `"aa sp": the SP survives, the manga art does not`);
+
+  group("The catalogue says when a printing is not on that number");
+  eq(OP.badge("op09-001 manga"), "Manga — not on this number",
+     `OP09-001 was never printed as a manga art, and an empty results page
+      reads as "no sales" when it means "no such card"`);
+  eq(q("op09-001 manga"), "OP09-001 (manga,comic)",
+     `...but the search still runs exactly as typed: the card in your hand
+      outranks a catalogue of English prints`);
+  eq(OP.badge("op01-016 manga"), "Manga", `a printing that exists is just named`);
+
+  group("Sealed product carries a language too");
+  // A Japanese booster box is a different product at a different price, both
+  // are titled with the set's name, and the set name alone returns both -- and
+  // the box is the bigger ticket, so getting it wrong costs more. The "jp" used
+  // to be thrown away here entirely.
+  ok(/\(japanese,jap,jp,jpn\)/.test(qAll("op17 bbx jp")),
+     `"op17 bbx jp" asks for the Japanese box`, `got ${qAll("op17 bbx jp")}`);
+  ok(/-\(japanese/.test(qAll("op17 bbx")),
+     `...and an unmarked box is the English one, same as a card`,
+     `got ${qAll("op17 bbx")}`);
+  ok(/world's strongest warriors/i.test(qAll("op17 bbx jp")),
+     `the set name survives the language`, `got ${qAll("op17 bbx jp")}`);
+
   // ── Catalogue ──────────────────────────────────────────────
   group("Catalogue (cards_op.js)");
   ok(OP.ready(), `cards_op.js loaded`, `CARDS_OP is empty — run scripts/fetch_op_cards.py`);
