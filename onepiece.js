@@ -31,7 +31,9 @@
 //
 //   the printing   the SP and the alternate art of a number are different
 //                  cards at different prices. Each asks for its own wording as
-//                  an OR-group and shuts the other out (see PRINT_SEARCH).
+//                  an OR-group and shuts the other out, and a card with no tag
+//                  at all -- the plain print, the cheap one -- shuts out both
+//                  (see PRINT_SEARCH).
 //   the language   Bandai prints the same ID on the English and the Japanese
 //                  card, so both are on one results page. A foreign card asks
 //                  for its language; an English one excludes the others, and
@@ -163,20 +165,51 @@
   //                                        is titled "SP Alt Art" as often as
   //                                        "(SP)", so "-alt" would throw away
   //                                        the SP listings it was aimed at.
+  //   base  -(alt,alternate,parallel,sp)   the third side of the same fact. A
+  //                                        card ID with no tag on it is the
+  //                                        PLAIN print -- that is what the badge
+  //                                        has always said -- and the plain
+  //                                        print is the cheap one, so a page
+  //                                        full of alts and SPs does not just
+  //                                        add noise, it prices a $3 card off a
+  //                                        $400 one. Both of the printings that
+  //                                        share the number go.
+  //
+  // The exclusions the old build had, and why this is not them coming back: it
+  // subtracted "-alt -manga -parallel" from every query, tag or no tag, so a
+  // seller who merely mentioned one of those words anywhere in a title was
+  // struck out of searches those words had nothing to do with. This subtracts
+  // only on the base branch, only the two printings that answer to the same ID,
+  // and any tag at all turns it off.
   var PRINT_SEARCH = {
     AA: { ask: ["alt", "alternate", "parallel"], not: ["sp"] },
     SP: { ask: ["sp"], not: [] }
   };
 
+  // What a card with no printing tag excludes. Not "manga" and not the rest of
+  // TREATMENTS: those are rare enough that a listing mentioning one is usually
+  // a comparison in the title rather than the card, and each word subtracted is
+  // real comps gone. Alt and SP are the two that genuinely flood the page.
+  var NOT_BASE = ["alt", "alternate", "parallel", "sp"];
+
   // The printing part of a card query: the group for a printing that shares its
-  // ID with another, else the tag exactly as it was typed (the old rule, and
-  // still the right one for a treatment nothing else collides with).
+  // ID with another, the base print's exclusions when no printing was named, or
+  // the tag exactly as it was typed (the old rule, and still the right one for a
+  // treatment nothing else collides with).
+  //
+  // The base exclusions need a card ID to be about anything. Without one the
+  // box is a free-text search on a character's name -- the badge stays blank
+  // there for the same reason -- and nothing has claimed a printing to exclude
+  // the others from.
   function printTerms(p) {
     var rule = p.treat ? PRINT_SEARCH[p.treat.code] : null;
-    if (!rule) return p.treatWords;
-    var out = [orGroup(rule.ask)];
-    if (rule.not.length) out.push("-" + orGroup(rule.not));
-    return out;
+    if (rule) {
+      var out = [orGroup(rule.ask)];
+      if (rule.not.length) out.push("-" + orGroup(rule.not));
+      return out;
+    }
+    if (p.treatWords.length) return p.treatWords;
+    return p.code ? ["-" + orGroup(NOT_BASE)] : [];
   }
 
   // Sealed product shorthand. etb/bbx are already global in index.html; these
