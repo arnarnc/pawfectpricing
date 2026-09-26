@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="theme-color" content="#09090b"/>
   <title>Pawfect Pulls · Pricing Tool</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -25,6 +26,13 @@
       --text3:     #71717a;
       --r:         12px;
       --r-sm:      8px;
+    }
+
+    html { -webkit-text-size-adjust: 100%; }
+    a, button, label, select, input { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+    a:focus-visible, button:focus-visible, select:focus-visible {
+      outline: 2px solid #a78bfa;
+      outline-offset: 2px;
     }
 
     body {
@@ -107,7 +115,11 @@
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 8px;
+      transition: opacity 0.15s, transform 0.2s;
     }
+    /* Nothing typed yet: the links have no target, so say so rather than
+       offering four buttons that silently do nothing. */
+    .btn-row.idle a { opacity: 0.4; pointer-events: none; }
     .btn-row a {
       display: flex;
       flex-direction: column;
@@ -127,14 +139,15 @@
     .btn-row a:hover  { filter: brightness(1.12); }
     .btn-row a:active { transform: scale(0.97); }
     .btn-row a .btn-icon { font-size: 17px; line-height: 1; }
-    .btn-row a .btn-label { font-size: 12px; font-weight: 600; }
-    .btn-row a .btn-sub   { font-size: 10px; font-weight: 400; opacity: 0.7; }
+    .btn-row a .btn-label { font-size: 12px; font-weight: 600; white-space: nowrap; }
+    .btn-row a .btn-sub   { font-size: 10px; font-weight: 500; opacity: 0.75; white-space: nowrap; }
     .btn-sold  { background: var(--purple); }
     .btn-avail { background: var(--green); }
     .btn-collectr { background: #2563eb; }
 
     /* ── Desktop "Go" mode ── */
-    .go-row { display: grid; grid-template-columns: 3fr 1.3fr 1fr; gap: 8px; }
+    .go-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; }
+    .go-row .btn-collectr, .go-row .btn-close { padding: 13px 14px; white-space: nowrap; }
     .btn-go, .btn-close, .go-row .btn-collectr {
       display: flex;
       align-items: center;
@@ -157,56 +170,40 @@
     .btn-go:hover, .btn-close:hover  { filter: brightness(1.12); }
     .btn-go:active, .btn-close:active { transform: scale(0.97); }
     .btn-go .btn-icon { font-size: 17px; }
-    .header-toggles { display: flex; align-items: center; gap: 14px; }
-    @media (max-width: 480px) { .header-toggles { gap: 10px; } }
-
-    /* ── Auction toggle ── */
-    .ebay-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 6px 10px;
-    }
-    .toggle-row {
-      display: flex;
+    /* ── Search options ── */
+    /* Pills rather than 28px switches: each is a full-height tap target, and
+       the label IS the control, so what is on reads at a glance. */
+    .options { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip { position: relative; cursor: pointer; user-select: none; }
+    .chip input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+    .chip span {
+      display: inline-flex;
       align-items: center;
       gap: 6px;
-      cursor: pointer;
-      user-select: none;
-    }
-    .toggle-label {
-      white-space: nowrap;
-      font-size: 10px;
+      min-height: 32px;
+      padding: 0 12px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 12px;
       font-weight: 600;
-      color: var(--text3);
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
+      color: var(--text2);
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
     }
-    .toggle-switch {
-      position: relative;
-      width: 28px;
-      height: 16px;
-      flex-shrink: 0;
-    }
-    .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
-    .toggle-track {
-      position: absolute;
-      inset: 0;
-      background: var(--border);
-      border-radius: 16px;
-      transition: background 0.2s;
-    }
-    .toggle-switch input:checked + .toggle-track { background: var(--purple); }
-    .toggle-thumb {
-      position: absolute;
-      top: 2px; left: 2px;
-      width: 12px; height: 12px;
-      background: white;
+    .chip span::before {
+      content: "";
+      width: 8px; height: 8px;
       border-radius: 50%;
-      transition: transform 0.2s;
+      border: 1.5px solid currentColor;
+      opacity: 0.7;
     }
-    .toggle-switch input:checked ~ .toggle-thumb { transform: translateX(12px); }
+    .chip:hover span { border-color: var(--text3); color: var(--text); }
+    .chip input:checked + span {
+      background: rgba(124,58,237,0.18);
+      border-color: var(--purple);
+      color: #c4b5fd;
+    }
+    .chip input:checked + span::before { background: currentColor; opacity: 1; }
+    .chip input:focus-visible + span { outline: 2px solid #a78bfa; outline-offset: 2px; }
 
     /* ── Search input ── */
     .search-section { display: flex; flex-direction: column; gap: 8px; }
@@ -264,21 +261,23 @@
     .game-note.show { opacity: 1; max-height: 20px; margin-top: 0; }
 
     .input-wrap { position: relative; }
-    .input-wrap input[type="text"] {
+    .input-wrap input[type="search"] { -webkit-appearance: none; appearance: none; }
+    .input-wrap input[type="search"]::-webkit-search-cancel-button { display: none; }
+    .input-wrap input[type="search"] {
       width: 100%;
       background: var(--surface2);
       border: 1.5px solid var(--border);
       color: var(--text);
       padding: 13px 44px 13px 14px;
-      font-size: 15px;
+      font-size: 16px;
       font-family: inherit;
       font-weight: 500;
       border-radius: var(--r);
       outline: none;
       transition: border-color 0.15s;
     }
-    .input-wrap input[type="text"]:focus  { border-color: var(--purple); }
-    .input-wrap input[type="text"]::placeholder { color: var(--text3); font-weight: 400; }
+    .input-wrap input[type="search"]:focus  { border-color: var(--purple); }
+    .input-wrap input[type="search"]::placeholder { color: var(--text3); font-weight: 400; }
 
     .clear-btn {
       position: absolute;
@@ -314,6 +313,7 @@
       /* Rebuilding the rows can't invalidate layout outside this box. */
       contain: layout style;
     }
+    .suggestions:empty { display: none; }
     .suggestions div {
       padding: 10px 14px;
       cursor: pointer;
@@ -470,7 +470,7 @@
       border: 1.5px solid var(--border);
       color: var(--text);
       padding: 13px 8px 13px 24px;
-      font-size: 15px;
+      font-size: 16px;
       font-family: inherit;
       font-weight: 500;
       border-radius: var(--r);
@@ -902,6 +902,73 @@
 
     .card { position: relative; }
 
+    /* ── Touch screens ── */
+    @media (pointer: coarse) {
+      /* iOS zooms the page into any field under 16px when it is focused. */
+      input, select, textarea { font-size: 16px !important; }
+      .comp-pct-select { width: 72px; }
+      .del-btn, .strike-btn { width: 38px; height: 38px; }
+      .sync-link { width: 36px; height: 36px; }
+      .icon-add-btn { width: 36px; height: 36px; }
+      .clear-btn { width: 32px; height: 32px; right: 8px; }
+      .saved-search .clear-btn { width: 30px; height: 30px; right: 4px; }
+      .suggestions { max-height: 280px; }
+      .suggestions div { padding: 12px 14px; }
+      .game-switch button { padding: 10px; font-size: 13.5px; }
+      .chip span { min-height: 38px; padding: 0 14px; font-size: 13px; }
+      .card-label-btn { padding: 6px 4px 6px 0; }
+    }
+
+    /* ── Phones ── */
+    /* The four lookups are docked to the bottom edge, where a thumb already
+       is, instead of sitting up the page. Desktop tiles make no sense on a
+       phone, so that option is hidden and its layout never applies here. */
+    @media (max-width: 599px) {
+      body, body.desktop-mode {
+        padding: 12vh 12px calc(104px + env(safe-area-inset-bottom));
+        justify-content: center;
+      }
+      .card { padding: 20px 16px 24px; gap: 16px; }
+      .header img { height: 60px; }
+      .chip-desktop { display: none; }
+      #goRow { display: none !important; }
+      #btnRow {
+        display: grid !important;
+        position: fixed;
+        left: 0; right: 0; bottom: 0;
+        z-index: 30;
+        gap: 6px;
+        padding: 10px max(10px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+        background: rgba(24,24,27,0.92);
+        -webkit-backdrop-filter: blur(14px);
+        backdrop-filter: blur(14px);
+        border-top: 1px solid var(--border);
+        box-shadow: 0 -8px 24px rgba(0,0,0,0.35);
+      }
+      #btnRow a { min-height: 60px; padding: 9px 4px; }
+      /* Typing a price or a name further down: get out of the way, or on
+         Android the dock rides up on the keyboard over the field in use. */
+      body.editing-other #btnRow { transform: translateY(110%); }
+
+      /* Comp rows stack: the card name gets the full width on its own line
+         and the price / offer / actions sit under it, instead of four columns
+         squeezing the name to a letter per line. */
+      .comp-table thead { display: none; }
+      .comp-table, .comp-table tbody { display: block; }
+      .comp-table tr.item-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 8px;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--border2);
+      }
+      .comp-table tr.item-row:last-child { border-bottom: none; }
+      .comp-table tbody td { padding: 0; border: none; }
+      .comp-table tbody td:first-child { flex: 1 1 100%; }
+      .comp-table td.row-actions { margin-left: auto; }
+    }
+
     /* ── Desktop ── */
     @media (min-width: 600px) {
       body {
@@ -916,7 +983,7 @@
 <body>
 <div class="card">
 
-  <button class="sync-link" id="syncBtn" onclick="openSync()" title="Sync recent searches">⇅</button>
+  <button class="sync-link" id="syncBtn" onclick="openSync()" title="Sync recent searches" aria-label="Sync recent searches">⇅</button>
 
   <div id="syncModal"></div>
 
@@ -931,69 +998,6 @@
 
   <hr class="divider">
 
-  <!-- eBay search -->
-  <div class="ebay-section">
-    <div class="ebay-header">
-      <p class="section-label">Search eBay</p>
-      <div class="header-toggles">
-        <label class="toggle-row" for="exactSearch" title="Send eBay exactly what you typed — no rewriting, no card filters">
-          <span class="toggle-label">Exact</span>
-          <span class="toggle-switch">
-            <input type="checkbox" id="exactSearch" onchange="onToggleExact()" />
-            <span class="toggle-track"></span>
-            <span class="toggle-thumb"></span>
-          </span>
-        </label>
-        <label class="toggle-row" for="excludeAuctions">
-          <span class="toggle-label">No auctions</span>
-          <span class="toggle-switch">
-            <input type="checkbox" id="excludeAuctions" onchange="onToggleAuctions()" />
-            <span class="toggle-track"></span>
-            <span class="toggle-thumb"></span>
-          </span>
-        </label>
-        <label class="toggle-row" for="desktopMode">
-          <span class="toggle-label">Desktop</span>
-          <span class="toggle-switch">
-            <input type="checkbox" id="desktopMode" onchange="onToggleDesktop()" />
-            <span class="toggle-track"></span>
-            <span class="toggle-thumb"></span>
-          </span>
-        </label>
-      </div>
-    </div>
-    <div class="btn-row" id="btnRow">
-      <a id="worldwideSoldLink" class="btn-sold" target="_blank" onclick="recordSearch()">
-        <span class="btn-icon">🌍</span>
-        <span class="btn-label">Global</span>
-        <span class="btn-sub">Sold</span>
-      </a>
-      <a id="auSoldLink" class="btn-sold" target="_blank" onclick="recordSearch()">
-        <span class="btn-icon">🇦🇺</span>
-        <span class="btn-label">Australia</span>
-        <span class="btn-sub">Sold</span>
-      </a>
-      <a id="worldwideAvailLink" class="btn-avail" target="_blank" onclick="recordSearch()">
-        <span class="btn-icon">🛒</span>
-        <span class="btn-label">Available</span>
-        <span class="btn-sub">Buy Now</span>
-      </a>
-      <a id="collectrLink" class="btn-collectr" target="_blank" onclick="recordSearch()">
-        <span class="btn-icon">📱</span>
-        <span class="btn-label">Collectr</span>
-        <span class="btn-sub">Look up</span>
-      </a>
-    </div>
-    <div class="go-row" id="goRow" style="display:none">
-      <button class="btn-go" onclick="openAll()">
-        <span class="btn-icon">⚡</span>
-        <span>Compare prices <small style="opacity:.7">(Enter)</small></span>
-      </button>
-      <a id="collectrLinkDesktop" class="btn-collectr" target="_blank" onclick="recordSearch()">📱 Collectr</a>
-      <button class="btn-close" onclick="closeAll()">✕ Close all <small style="opacity:.7">(Esc)</small></button>
-    </div>
-  </div>
-
   <!-- Card search -->
   <div class="search-section">
     <div class="game-switch" id="gameSwitch">
@@ -1002,13 +1006,62 @@
     </div>
     <div class="game-note" id="gameNote" aria-live="polite"></div>
     <div class="input-wrap">
-      <input type="text" id="cardInput"
+      <input type="search" id="cardInput" aria-label="Card to search"
         placeholder="e.g. Charizard 125/094 · try etb or bbx too"
-        oninput="update()" autocomplete="off" />
-      <button class="clear-btn" onclick="clearInput()">×</button>
+        oninput="update()" autocomplete="off" autocapitalize="none" autocorrect="off"
+        spellcheck="false" enterkeyhint="search" />
+      <button type="button" class="clear-btn" onclick="clearInput()" aria-label="Clear search">×</button>
       <div class="suggestions" id="suggestions"></div>
     </div>
     <div class="status-wrap" id="status"></div>
+
+    <div class="options" role="group" aria-label="Search options">
+      <label class="chip" title="Send exactly what you typed — no rewriting, no card filters">
+        <input type="checkbox" id="exactSearch" onchange="onToggleExact()" />
+        <span>Exact text</span>
+      </label>
+      <label class="chip" title="Sold results: Buy It Now only">
+        <input type="checkbox" id="excludeAuctions" onchange="onToggleAuctions()" />
+        <span>No auctions</span>
+      </label>
+      <label class="chip chip-desktop" title="Open the eBay searches as tiled windows">
+        <input type="checkbox" id="desktopMode" onchange="onToggleDesktop()" />
+        <span>Desktop tiles</span>
+      </label>
+    </div>
+
+    <!-- On phones this row is docked to the bottom of the screen, in thumb
+         reach; on wider screens it sits here, under the box it acts on. -->
+    <nav class="btn-row idle" id="btnRow" aria-label="Look up prices">
+      <a id="worldwideSoldLink" class="btn-sold" target="_blank" rel="noopener" onclick="recordSearch()">
+        <span class="btn-icon" aria-hidden="true">🌍</span>
+        <span class="btn-label">Global</span>
+        <span class="btn-sub">eBay sold</span>
+      </a>
+      <a id="auSoldLink" class="btn-sold" target="_blank" rel="noopener" onclick="recordSearch()">
+        <span class="btn-icon" aria-hidden="true">🇦🇺</span>
+        <span class="btn-label">Australia</span>
+        <span class="btn-sub">eBay sold</span>
+      </a>
+      <a id="worldwideAvailLink" class="btn-avail" target="_blank" rel="noopener" onclick="recordSearch()">
+        <span class="btn-icon" aria-hidden="true">🛒</span>
+        <span class="btn-label">Available</span>
+        <span class="btn-sub">Buy now</span>
+      </a>
+      <a id="collectrLink" class="btn-collectr" target="_blank" rel="noopener" onclick="recordSearch()">
+        <span class="btn-icon" aria-hidden="true">📱</span>
+        <span class="btn-label">Collectr</span>
+        <span class="btn-sub">Look up</span>
+      </a>
+    </nav>
+    <div class="go-row" id="goRow" style="display:none">
+      <button class="btn-go" onclick="openAll()">
+        <span class="btn-icon">⚡</span>
+        <span>Compare prices <small style="opacity:.7">(Enter)</small></span>
+      </button>
+      <a id="collectrLinkDesktop" class="btn-collectr" target="_blank" rel="noopener" onclick="recordSearch()">📱 Collectr</a>
+      <button class="btn-close" onclick="closeAll()">✕ Close all <small style="opacity:.7">(Esc)</small></button>
+    </div>
   </div>
 
   <hr class="divider">
@@ -1269,7 +1322,8 @@
     applyDesktopMode();
     // Restore the last typed card so a refresh doesn't lose it.
     const lastCard = localStorage.getItem("lastCard");
-    if (lastCard) { document.getElementById("cardInput").value = lastCard; update(); }
+    // Restored text is a finished search, not one being typed: no menu over it.
+    if (lastCard) { document.getElementById("cardInput").value = lastCard; update(); closeSuggestions(); }
     // Keyboard flow: Enter (from the card box) opens all 3; Esc closes them.
     document.getElementById("cardInput").addEventListener("keydown", e => {
       // Tab accepts the first suggestion and adds a space to type the next word.
@@ -1286,7 +1340,13 @@
         }
         return;
       }
-      if (e.key === "Enter" && desktopMode) { e.preventDefault(); openAll(); }
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      if (desktopMode && !isPhoneLayout()) { openAll(); return; }
+      // Phone: the keyboard's Search key means "done typing" — drop the
+      // keyboard and the menu so the lookup buttons underneath are in view.
+      closeSuggestions();
+      if (isTouch) e.target.blur();
     });
     document.addEventListener("keydown", e => {
       if (e.key !== "Escape") return;
@@ -1327,6 +1387,14 @@
   // eBay blocks iframe embedding (X-Frame-Options / CSP frame-ancestors),
   // so we tile the 3 searches as popup windows in a 2x2 grid and keep
   // references to them so they can all be closed from the main page.
+  const isTouch = window.matchMedia("(pointer: coarse)").matches;
+  // Mirrors the CSS breakpoint that docks the buttons and hides desktop tiles.
+  function isPhoneLayout() { return window.matchMedia("(max-width: 599px)").matches; }
+  // Any field other than the card box has focus: the dock steps aside (CSS).
+  document.addEventListener("focusin", e => document.body.classList.toggle("editing-other",
+    e.target.matches("input:not([type=checkbox]), select, textarea") && e.target.id !== "cardInput"));
+  document.addEventListener("focusout", () => document.body.classList.remove("editing-other"));
+
   function isDesktopBrowser() {
     return !/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
       && window.innerWidth >= 1024;
@@ -1572,6 +1640,7 @@
     const value = document.getElementById("cardInput").value.trim();
     const statusEl = document.getElementById("status");
     saveLastCard(document.getElementById("cardInput").value);
+    document.getElementById("btnRow").classList.toggle("idle", !value);
     if (!value) { statusEl.innerHTML = ""; closeAll(); return; }
     // First, because everything below is game-specific: the URL builder, the
     // print badge and the dropdown all ask `game` what they are.
@@ -2069,17 +2138,21 @@
       + (r.src === "intl" ? ` <span class="sug-src">intl</span>` : "")
       + `</span>`;
     div.onmousedown = e => e.preventDefault();
-    div.onclick = () => fillFromSuggestion(fill);
+    div.onclick = () => fillFromSuggestion(fill, true);
     return div;
   }
 
   // Drop a suggestion into the box, run the app, and close the dropdown —
   // cancelling any in-flight lookup so it can't re-open the menu after select.
-  function fillFromSuggestion(value) {
+  // `complete` is a whole card (name + number), not a name still being typed:
+  // on a touch screen that drops the keyboard, so the docked lookup buttons
+  // are the next thing in view instead of being hidden behind it.
+  function fillFromSuggestion(value, complete) {
     const ci = document.getElementById("cardInput");
     ci.value = value;
     update();              // refresh eBay links + status badge for the picked card
     closeSuggestions();    // cancel the lookup update() just queued, close the menu
+    if (complete && isTouch) { ci.blur(); return; }
     ci.focus();
     ci.setSelectionRange(ci.value.length, ci.value.length);
   }
@@ -2274,6 +2347,7 @@
     input.focus();
     closeSuggestions();       // also cancels any pending/in-flight lookup
     document.getElementById("status").innerHTML = "";
+    document.getElementById("btnRow").classList.add("idle");
     flushLastCard();          // cancels the pending debounced write, then stores ""
     closeAll(); // clearing the box closes any open panels
   }
@@ -2429,9 +2503,10 @@
     ci.value = item.label;
     update();
     closeSuggestions();   // it's an exact card already — don't cover the buttons
+    ci.scrollIntoView({ block: "center", behavior: "smooth" });
+    if (isTouch) return;  // no keyboard: the docked buttons are what's next
     ci.focus();
     ci.setSelectionRange(ci.value.length, ci.value.length);
-    ci.scrollIntoView({ block: "center", behavior: "smooth" });
   }
 
   function cascadePct(val) {
