@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"/>
   <meta name="theme-color" content="#09090b"/>
   <title>Pawfect Pulls · Pricing Tool</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -260,6 +260,7 @@
     }
     .game-note.show { opacity: 1; max-height: 20px; margin-top: 0; }
 
+    .composer { position: relative; display: flex; flex-direction: column; gap: 8px; }
     .input-wrap { position: relative; }
     .input-wrap input[type="search"] { -webkit-appearance: none; appearance: none; }
     .input-wrap input[type="search"]::-webkit-search-cancel-button { display: none; }
@@ -268,7 +269,8 @@
       background: var(--surface2);
       border: 1.5px solid var(--border);
       color: var(--text);
-      padding: 13px 44px 13px 14px;
+      height: 50px;
+      padding: 0 44px 0 14px;
       font-size: 16px;
       font-family: inherit;
       font-weight: 500;
@@ -301,7 +303,8 @@
 
     .suggestions {
       position: absolute;
-      top: calc(100% + 4px);
+      /* Under the box, over the buttons: the box is a fixed 50px tall. */
+      top: 54px;
       left: 0; right: 0;
       background: var(--surface2);
       border: 1px solid var(--border);
@@ -920,35 +923,50 @@
     }
 
     /* ── Phones ── */
-    /* The four lookups are docked to the bottom edge, where a thumb already
-       is, instead of sitting up the page. Desktop tiles make no sense on a
-       phone, so that option is hidden and its layout never applies here. */
+    /* Search box and lookups are pinned to the bottom edge, where the thumb
+       is. iOS draws the keyboard OVER the page rather than shrinking it, so
+       JS (placeComposer) lifts the composer by the keyboard's height; the
+       menu opens upward from it with the best match nearest the thumb.
+       Desktop tiles make no sense on a phone, so that option is hidden. */
     @media (max-width: 599px) {
       body, body.desktop-mode {
-        padding: 12vh 12px calc(104px + env(safe-area-inset-bottom));
+        padding: 12vh 12px calc(170px + env(safe-area-inset-bottom));
         justify-content: center;
       }
       .card { padding: 20px 16px 24px; gap: 16px; }
       .header img { height: 60px; }
       .chip-desktop { display: none; }
       #goRow { display: none !important; }
-      #btnRow {
-        display: grid !important;
+      .composer {
         position: fixed;
         left: 0; right: 0; bottom: 0;
         z-index: 30;
-        gap: 6px;
+        flex-direction: column-reverse;
         padding: 10px max(10px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
-        background: rgba(24,24,27,0.92);
+        background: rgba(24,24,27,0.94);
         -webkit-backdrop-filter: blur(14px);
         backdrop-filter: blur(14px);
         border-top: 1px solid var(--border);
         box-shadow: 0 -8px 24px rgba(0,0,0,0.35);
+        transition: transform 0.2s;
       }
-      #btnRow a { min-height: 60px; padding: 9px 4px; }
-      /* Typing a price or a name further down: get out of the way, or on
-         Android the dock rides up on the keyboard over the field in use. */
-      body.editing-other #btnRow { transform: translateY(110%); }
+      /* Sitting on the keyboard: no home-indicator gap to leave. */
+      .composer.kb-open { padding-bottom: 8px; }
+      #btnRow { display: grid !important; gap: 6px; }
+      #btnRow a { min-height: 56px; padding: 8px 4px; }
+      .composer .suggestions {
+        top: auto;
+        bottom: calc(100% + 6px);
+        left: 10px; right: 10px;
+        max-height: var(--sugg-max, 280px);
+        display: flex;
+        flex-direction: column-reverse;
+      }
+      .composer .suggestions:empty { display: none; }
+      .composer .suggestions div { flex-shrink: 0; }
+      /* Typing a price or a name further down: get out of the way, or the
+         composer would sit on the keyboard over the field in use. */
+      body.editing-other .composer { transform: translateY(120%); }
 
       /* Comp rows stack: the card name gets the full width on its own line
          and the price / offer / actions sit under it, instead of four columns
@@ -1005,12 +1023,48 @@
       <button type="button" data-game="op" onclick="setGame('op')">One Piece</button>
     </div>
     <div class="game-note" id="gameNote" aria-live="polite"></div>
-    <div class="input-wrap">
-      <input type="search" id="cardInput" aria-label="Card to search"
-        placeholder="e.g. Charizard 125/094 · try etb or bbx too"
-        oninput="update()" autocomplete="off" autocapitalize="none" autocorrect="off"
-        spellcheck="false" enterkeyhint="search" />
-      <button type="button" class="clear-btn" onclick="clearInput()" aria-label="Clear search">×</button>
+    <!-- The search box and the lookups that act on it travel together. On a
+         phone they are pinned to the bottom edge — the box nearest the thumb,
+         the buttons right above it — and ride up on top of the keyboard while
+         typing, so neither is ever hidden behind it. -->
+    <div class="composer" id="composer">
+      <div class="input-wrap">
+        <input type="search" id="cardInput" aria-label="Card to search"
+          placeholder="e.g. Charizard 125/094 · try etb or bbx too"
+          oninput="update()" autocomplete="off" autocapitalize="none" autocorrect="off"
+          spellcheck="false" enterkeyhint="search" />
+        <button type="button" class="clear-btn" onclick="clearInput()" aria-label="Clear search">×</button>
+      </div>
+      <nav class="btn-row idle" id="btnRow" aria-label="Look up prices">
+        <a id="worldwideSoldLink" class="btn-sold" target="_blank" rel="noopener" onclick="recordSearch()">
+          <span class="btn-icon" aria-hidden="true">🌍</span>
+          <span class="btn-label">Global</span>
+          <span class="btn-sub">eBay sold</span>
+        </a>
+        <a id="auSoldLink" class="btn-sold" target="_blank" rel="noopener" onclick="recordSearch()">
+          <span class="btn-icon" aria-hidden="true">🇦🇺</span>
+          <span class="btn-label">Australia</span>
+          <span class="btn-sub">eBay sold</span>
+        </a>
+        <a id="worldwideAvailLink" class="btn-avail" target="_blank" rel="noopener" onclick="recordSearch()">
+          <span class="btn-icon" aria-hidden="true">🛒</span>
+          <span class="btn-label">Available</span>
+          <span class="btn-sub">Buy now</span>
+        </a>
+        <a id="collectrLink" class="btn-collectr" target="_blank" rel="noopener" onclick="recordSearch()">
+          <span class="btn-icon" aria-hidden="true">📱</span>
+          <span class="btn-label">Collectr</span>
+          <span class="btn-sub">Look up</span>
+        </a>
+      </nav>
+      <div class="go-row" id="goRow" style="display:none">
+        <button class="btn-go" onclick="openAll()">
+          <span class="btn-icon">⚡</span>
+          <span>Compare prices <small style="opacity:.7">(Enter)</small></span>
+        </button>
+        <a id="collectrLinkDesktop" class="btn-collectr" target="_blank" rel="noopener" onclick="recordSearch()">📱 Collectr</a>
+        <button class="btn-close" onclick="closeAll()">✕ Close all <small style="opacity:.7">(Esc)</small></button>
+      </div>
       <div class="suggestions" id="suggestions"></div>
     </div>
     <div class="status-wrap" id="status"></div>
@@ -1030,38 +1084,6 @@
       </label>
     </div>
 
-    <!-- On phones this row is docked to the bottom of the screen, in thumb
-         reach; on wider screens it sits here, under the box it acts on. -->
-    <nav class="btn-row idle" id="btnRow" aria-label="Look up prices">
-      <a id="worldwideSoldLink" class="btn-sold" target="_blank" rel="noopener" onclick="recordSearch()">
-        <span class="btn-icon" aria-hidden="true">🌍</span>
-        <span class="btn-label">Global</span>
-        <span class="btn-sub">eBay sold</span>
-      </a>
-      <a id="auSoldLink" class="btn-sold" target="_blank" rel="noopener" onclick="recordSearch()">
-        <span class="btn-icon" aria-hidden="true">🇦🇺</span>
-        <span class="btn-label">Australia</span>
-        <span class="btn-sub">eBay sold</span>
-      </a>
-      <a id="worldwideAvailLink" class="btn-avail" target="_blank" rel="noopener" onclick="recordSearch()">
-        <span class="btn-icon" aria-hidden="true">🛒</span>
-        <span class="btn-label">Available</span>
-        <span class="btn-sub">Buy now</span>
-      </a>
-      <a id="collectrLink" class="btn-collectr" target="_blank" rel="noopener" onclick="recordSearch()">
-        <span class="btn-icon" aria-hidden="true">📱</span>
-        <span class="btn-label">Collectr</span>
-        <span class="btn-sub">Look up</span>
-      </a>
-    </nav>
-    <div class="go-row" id="goRow" style="display:none">
-      <button class="btn-go" onclick="openAll()">
-        <span class="btn-icon">⚡</span>
-        <span>Compare prices <small style="opacity:.7">(Enter)</small></span>
-      </button>
-      <a id="collectrLinkDesktop" class="btn-collectr" target="_blank" rel="noopener" onclick="recordSearch()">📱 Collectr</a>
-      <button class="btn-close" onclick="closeAll()">✕ Close all <small style="opacity:.7">(Esc)</small></button>
-    </div>
   </div>
 
   <hr class="divider">
@@ -1394,6 +1416,31 @@
   document.addEventListener("focusin", e => document.body.classList.toggle("editing-other",
     e.target.matches("input:not([type=checkbox]), select, textarea") && e.target.id !== "cardInput"));
   document.addEventListener("focusout", () => document.body.classList.remove("editing-other"));
+
+  // Keep the phone composer on top of the keyboard. Android (with
+  // interactive-widget=resizes-content) shrinks the page, so this comes out 0
+  // there; iOS overlays the keyboard, and visualViewport is the only way to
+  // know how much of the screen it took.
+  function placeComposer() {
+    const c = document.getElementById("composer");
+    if (!c) return;
+    if (!isPhoneLayout()) { c.style.bottom = ""; c.classList.remove("kb-open"); return; }
+    const vv = window.visualViewport;
+    const kb = vv ? Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)) : 0;
+    c.style.bottom = kb + "px";
+    c.classList.toggle("kb-open", kb > 80);
+    // The upward menu gets whatever is left between the top of the visible
+    // screen and the composer, so it never runs off the top.
+    const room = (vv ? vv.height : window.innerHeight) - c.offsetHeight - 16;
+    document.documentElement.style.setProperty("--sugg-max",
+      Math.max(120, Math.min(320, room)) + "px");
+  }
+  if (window.visualViewport) {
+    visualViewport.addEventListener("resize", placeComposer);
+    visualViewport.addEventListener("scroll", placeComposer);
+  }
+  window.addEventListener("resize", placeComposer);
+  document.addEventListener("DOMContentLoaded", placeComposer);
 
   function isDesktopBrowser() {
     return !/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
@@ -2138,21 +2185,17 @@
       + (r.src === "intl" ? ` <span class="sug-src">intl</span>` : "")
       + `</span>`;
     div.onmousedown = e => e.preventDefault();
-    div.onclick = () => fillFromSuggestion(fill, true);
+    div.onclick = () => fillFromSuggestion(fill);
     return div;
   }
 
   // Drop a suggestion into the box, run the app, and close the dropdown —
   // cancelling any in-flight lookup so it can't re-open the menu after select.
-  // `complete` is a whole card (name + number), not a name still being typed:
-  // on a touch screen that drops the keyboard, so the docked lookup buttons
-  // are the next thing in view instead of being hidden behind it.
-  function fillFromSuggestion(value, complete) {
+  function fillFromSuggestion(value) {
     const ci = document.getElementById("cardInput");
     ci.value = value;
     update();              // refresh eBay links + status badge for the picked card
     closeSuggestions();    // cancel the lookup update() just queued, close the menu
-    if (complete && isTouch) { ci.blur(); return; }
     ci.focus();
     ci.setSelectionRange(ci.value.length, ci.value.length);
   }
@@ -2353,7 +2396,7 @@
   }
 
   document.addEventListener("click", e => {
-    if (!document.querySelector(".input-wrap").contains(e.target))
+    if (!e.target.closest(".input-wrap, #suggestions"))
       closeSuggestions();     // dismiss + cancel lookup so it can't reopen later
   });
 
@@ -2503,8 +2546,8 @@
     ci.value = item.label;
     update();
     closeSuggestions();   // it's an exact card already — don't cover the buttons
+    if (isPhoneLayout()) return;  // box and buttons are already pinned in view
     ci.scrollIntoView({ block: "center", behavior: "smooth" });
-    if (isTouch) return;  // no keyboard: the docked buttons are what's next
     ci.focus();
     ci.setSelectionRange(ci.value.length, ci.value.length);
   }
