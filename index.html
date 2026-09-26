@@ -105,7 +105,7 @@
 
     .btn-row {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-columns: repeat(4, 1fr);
       gap: 8px;
     }
     .btn-row a {
@@ -131,10 +131,11 @@
     .btn-row a .btn-sub   { font-size: 10px; font-weight: 400; opacity: 0.7; }
     .btn-sold  { background: var(--purple); }
     .btn-avail { background: var(--green); }
+    .btn-collectr { background: #2563eb; }
 
     /* ── Desktop "Go" mode ── */
-    .go-row { display: grid; grid-template-columns: 3fr 1fr; gap: 8px; }
-    .btn-go, .btn-close {
+    .go-row { display: grid; grid-template-columns: 3fr 1.3fr 1fr; gap: 8px; }
+    .btn-go, .btn-close, .go-row .btn-collectr {
       display: flex;
       align-items: center;
       justify-content: center;
@@ -149,18 +150,23 @@
       font-family: inherit;
       transition: filter 0.15s, transform 0.1s;
     }
+    .go-row .btn-collectr { text-decoration: none; }
+    .go-row .btn-collectr:hover { filter: brightness(1.12); }
     .btn-go    { background: linear-gradient(135deg, var(--purple), var(--green)); }
     .btn-close { background: var(--border); color: var(--text2); font-weight: 600; font-size: 12px; }
     .btn-go:hover, .btn-close:hover  { filter: brightness(1.12); }
     .btn-go:active, .btn-close:active { transform: scale(0.97); }
     .btn-go .btn-icon { font-size: 17px; }
     .header-toggles { display: flex; align-items: center; gap: 14px; }
+    @media (max-width: 480px) { .header-toggles { gap: 10px; } }
 
     /* ── Auction toggle ── */
     .ebay-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 6px 10px;
     }
     .toggle-row {
       display: flex;
@@ -170,6 +176,7 @@
       user-select: none;
     }
     .toggle-label {
+      white-space: nowrap;
       font-size: 10px;
       font-weight: 600;
       color: var(--text3);
@@ -348,7 +355,7 @@
     /* ── Sync ── */
     .sync-link {
       position: absolute;
-      top: 0; right: 34px;
+      top: 0; right: 0;
       width: 28px; height: 28px;
       border-radius: 50%;
       background: var(--surface2);
@@ -443,6 +450,7 @@
     .status-badge.graded { background: rgba(234,88,12,0.15); color: #fb923c; }
     .status-badge.raw    { background: rgba(124,58,237,0.15); color: #a78bfa; }
     .status-badge.sealed { background: rgba(74,222,128,0.15); color: #4ade80; }
+    .status-badge.exact  { background: rgba(148,163,184,0.15); color: var(--text2); }
     /* Which PRINTING the One Piece query is asking eBay for. Sits next to the
        raw/graded badge because on this game they are separate questions: an
        OP01-016 can be raw and still be the $2 print or the $2,000 one. */
@@ -891,24 +899,6 @@
     .settlement-result.even-trade .r-label,
     .settlement-result.even-trade .r-val     { color: #a78bfa; }
 
-    /* ── Help link ── */
-    .help-link {
-      position: absolute;
-      top: 0; right: 0;
-      width: 28px; height: 28px;
-      border-radius: 50%;
-      background: var(--surface2);
-      border: 1px solid var(--border2);
-      color: var(--text3);
-      font-size: 13px;
-      font-weight: 600;
-      text-decoration: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background 0.15s, color 0.15s;
-    }
-    .help-link:hover { background: var(--border2); color: var(--text2); }
 
     .card { position: relative; }
 
@@ -926,7 +916,6 @@
 <body>
 <div class="card">
 
-  <a href="help.html" class="help-link" title="How to use">?</a>
   <button class="sync-link" id="syncBtn" onclick="openSync()" title="Sync recent searches">⇅</button>
 
   <div id="syncModal"></div>
@@ -947,6 +936,14 @@
     <div class="ebay-header">
       <p class="section-label">Search eBay</p>
       <div class="header-toggles">
+        <label class="toggle-row" for="exactSearch" title="Send eBay exactly what you typed — no rewriting, no card filters">
+          <span class="toggle-label">Exact</span>
+          <span class="toggle-switch">
+            <input type="checkbox" id="exactSearch" onchange="onToggleExact()" />
+            <span class="toggle-track"></span>
+            <span class="toggle-thumb"></span>
+          </span>
+        </label>
         <label class="toggle-row" for="excludeAuctions">
           <span class="toggle-label">No auctions</span>
           <span class="toggle-switch">
@@ -981,12 +978,18 @@
         <span class="btn-label">Available</span>
         <span class="btn-sub">Buy Now</span>
       </a>
+      <a id="collectrLink" class="btn-collectr" target="_blank" onclick="recordSearch()">
+        <span class="btn-icon">📱</span>
+        <span class="btn-label">Collectr</span>
+        <span class="btn-sub">Look up</span>
+      </a>
     </div>
     <div class="go-row" id="goRow" style="display:none">
       <button class="btn-go" onclick="openAll()">
         <span class="btn-icon">⚡</span>
         <span>Compare prices <small style="opacity:.7">(Enter)</small></span>
       </button>
+      <a id="collectrLinkDesktop" class="btn-collectr" target="_blank" onclick="recordSearch()">📱 Collectr</a>
       <button class="btn-close" onclick="closeAll()">✕ Close all <small style="opacity:.7">(Esc)</small></button>
     </div>
   </div>
@@ -1262,6 +1265,7 @@
     // first keystroke — which is the only moment the user would ever feel it.
     setTimeout(buildGameWords, 0);
     document.getElementById("excludeAuctions").checked = excludeAuctions;
+    document.getElementById("exactSearch").checked = exactSearch;
     applyDesktopMode();
     // Restore the last typed card so a refresh doesn't lose it.
     const lastCard = localStorage.getItem("lastCard");
@@ -1303,6 +1307,19 @@
   function onToggleAuctions() {
     excludeAuctions = document.getElementById("excludeAuctions").checked;
     localStorage.setItem("excludeAuctions", excludeAuctions);
+    update();
+  }
+
+  // ── Exact search ──────────────────────────────────────────
+  // Off by default. When on, eBay gets the typed text verbatim, for either
+  // game: no number normalising, no suffix stripping, no shorthand expansion,
+  // no One Piece ID rewrite, and no category / Graded filter. Only what the
+  // buttons themselves mean (sold, AU, Buy It Now, sort) and the user's own
+  // "No auctions" choice still apply.
+  let exactSearch = localStorage.getItem("exactSearch") === "true";
+  function onToggleExact() {
+    exactSearch = document.getElementById("exactSearch").checked;
+    localStorage.setItem("exactSearch", exactSearch);
     update();
   }
 
@@ -1490,12 +1507,13 @@
     // name, the printing shorthand becomes seller wording. Everything after
     // that — condition expansion, the graded aspect, the sort codes — is shared,
     // because none of it is game-specific.
-    const normalized = game === "op"
+    const normalized = exactSearch ? input
+      : game === "op"
       ? expandProducts(expandConditions(OnePiece.buildQuery(input)))
       : expandProducts(expandConditions(stripCardSuffix(normalizeCardNumber(input))));
     const encoded    = encodeURIComponent(normalized);
     const gradedFlag = isGraded(input) ? "Yes" : "No";
-    const base = isSealedProduct(input)
+    const base = exactSearch || isSealedProduct(input)
       ? `_sacat=0`
       : `_sacat=0&Graded=${gradedFlag}&_dcat=183454`;
     const binParam = excludeAuctions ? "&LH_BIN=1" : "";
@@ -1504,6 +1522,35 @@
       auSold:         `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&${base}&LH_Sold=1&LH_Complete=1&rt=nc&LH_PrefLoc=1&_sop=${SORT.RECENT}${binParam}`,
       worldwideAvail: `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&${base}&LH_BIN=1&_sop=${SORT.BEST_MATCH}`
     };
+  }
+
+  // ── Collectr lookup ───────────────────────────────────────
+  // app.getcollectr.com/?query=… fills Collectr's own search box. The domain is
+  // an app link on iOS and Android (its apple-app-site-association and
+  // assetlinks.json claim every path), so on a phone with Collectr installed
+  // the tap opens the app; everywhere else it opens the website.
+  //
+  // Collectr's search is far stricter than eBay's, measured on the live site:
+  // every word must hit, so "umbreon vmax 215/203 psa 10 nm" finds nothing
+  // where "umbreon vmax 215/203" finds the card. A hyphen breaks it too
+  // ("charizard-gx 150/147" → nothing, "charizard gx 150/147" → the card), and
+  // so does printing shorthand ("nami op01-016 sp" → nothing). So by default it
+  // gets only the card: name + number for Pokémon, with the number exactly as
+  // typed, because Collectr matches it literally ("4/102" and "004/102" are
+  // different results there). For One Piece it gets name + ID, which lists
+  // every printing of that ID with its price. Exact mode sends the text as is.
+  function collectrQuery(input) {
+    if (exactSearch) return input;
+    if (game === "op") {
+      const p = OnePiece.parseQuery(input);
+      if (p.code) return p.name.concat(p.code).join(" ");
+    }
+    const q = expandProducts(stripQueryNoise(normalizeCardNumber(input)))
+      .replace(/(\p{L})-(?=\p{L})/gu, "$1 ");
+    return q || input;
+  }
+  function collectrUrl(input) {
+    return "https://app.getcollectr.com/?query=" + encodeURIComponent(collectrQuery(input));
   }
 
   // localStorage writes are synchronous and block the main thread. Saving the
@@ -1533,7 +1580,12 @@
     document.getElementById("worldwideSoldLink").href  = urls.worldwideSold;
     document.getElementById("auSoldLink").href         = urls.auSold;
     document.getElementById("worldwideAvailLink").href = urls.worldwideAvail;
-    if (isSealedProduct(value)) {
+    const collectr = collectrUrl(value);
+    document.getElementById("collectrLink").href        = collectr;
+    document.getElementById("collectrLinkDesktop").href = collectr;
+    if (exactSearch) {
+      statusEl.innerHTML = '<span class="status-badge exact">🔤 Exact search</span>';
+    } else if (isSealedProduct(value)) {
       statusEl.innerHTML = '<span class="status-badge sealed">📦 Sealed</span>';
     } else if (isGraded(value)) {
       statusEl.innerHTML = '<span class="status-badge graded">⚡ Graded Card</span>';
@@ -1543,7 +1595,7 @@
     // Which printing the One Piece search is actually pinned to. Worth its own
     // badge: the same ID spans a $2 card and a $2,000 one, and the difference
     // between them is a two-letter tag that is easy to forget to type.
-    if (game === "op") {
+    if (game === "op" && !exactSearch) {
       const print = OnePiece.badge(value);
       if (print) statusEl.innerHTML += `<span class="status-badge print">🏴 ${escHtml(print)}</span>`;
     }
@@ -1888,8 +1940,8 @@
   // Turn raw input like "PSA 10 Charizard ex 125/197 reverse holo" into
   // { name: "charizard ex", number: "125", total: "197" }. Best-effort and
   // forgiving — it never throws, so a weird query just yields a looser search.
-  function parseCardQuery(raw) {
-    let s = (raw || "").toLowerCase()
+  function stripQueryNoise(raw) {
+    return (raw || "").toLowerCase()
       // Grading company + grade (PSA 10, BGS 9.5, CGC 8 …).
       .replace(/\b(psa|bgs|cgc|sgc|tag)\s*\.?\s*(?:10(?:\.0)?|[1-9](?:\.[05])?)\b/g, " ")
       // Condition shorthand and common marketing words.
@@ -1897,7 +1949,10 @@
       .replace(/\b(1st\s*ed(?:ition)?|first\s*ed(?:ition)?|shadowless|unlimited|reverse\s*holo|rev\s*holo|holo(?:foil)?|foil|promo|full\s*art|alt(?:ernate)?\s*art|secret\s*rare)\b/g, " ")
       .replace(/#/g, " ")
       .replace(/\s+/g, " ")
-      .trim()
+      .trim();
+  }
+  function parseCardQuery(raw) {
+    let s = stripQueryNoise(raw)
       // "charizard 4 102" -> "charizard 4/102". The eBay side has always
       // accepted the space-separated form (the help page recommends it), but
       // the parser used to glue the digits into "4102" and match nothing.
