@@ -793,9 +793,24 @@
   // LEXICAL scope rather than on `window` -- so it has to be reached by bare
   // name, exactly as index.html reaches CARDS. Going through root.CARDS_OP
   // silently finds undefined and leaves the catalogue looking empty.
+  //
+  // cards_op_jp.js (CARDS_OP_JP) adds the Japanese prints that have no English
+  // release yet -- Japan runs months ahead. Newest first, like the English
+  // rows, so they lead. Any ID the English catalogue has is skipped here too,
+  // in case the two files were refreshed at different times: the English row
+  // is the same card, and the language is picked by typing "jp".
+  var allRows = null;
   function rows() {
-    return (typeof CARDS_OP !== "undefined" && CARDS_OP) ? CARDS_OP : [];
+    if (allRows) return allRows;
+    var en = (typeof CARDS_OP !== "undefined" && CARDS_OP) ? CARDS_OP : [];
+    if (!en.length) return en;
+    var jp = (typeof CARDS_OP_JP !== "undefined" && CARDS_OP_JP) ? CARDS_OP_JP : [];
+    var have = {};
+    en.forEach(function (r) { have[String(r[1]).toUpperCase()] = 1; });
+    allRows = jp.filter(function (r) { return !have[String(r[1]).toUpperCase()]; }).concat(en);
+    return allRows;
   }
+  function isJp(r) { return r[8] === "jp"; }
   function ready() { return rows().length > 0; }
 
   // Set code -> set name, built once from the card IDs themselves so it can
@@ -884,13 +899,65 @@
       orig: !!c[7] && String(c[1]).split("-")[0].toUpperCase() === c[7],
       name: c[0],
       num: c[1],
-      set: c[4],
+      set: c[4] + (isJp(c) ? " (JP)" : ""),
       rarity: c[2],
       treat: c[3],
       label: t ? t.label : "",
-      fill: (c[0] + " " + c[1] + (tag ? " " + tag : "")).trim(),
+      // A Japanese-only print says so in the box, so the eBay search asks for
+      // Japanese listings rather than excluding them.
+      fill: (c[0] + " " + c[1] + (tag ? " " + tag : "") + (isJp(c) ? " jp" : "")).trim(),
       src: ""
     };
+  }
+
+  // ── Versions of one number ────────────────────────────────
+  // Every printing the catalogue holds for the typed ID, grouped by treatment,
+  // with the products each one came in -- a Base print reprinted in a promo
+  // product (the stamped ones) is the same treatment from another set. Null
+  // when no ID is typed or the catalogue does not know it.
+  var VERSION_ORDER = ["BASE"].concat(TREATMENTS.map(function (t) { return t.code; }));
+  function versions(raw) {
+    var p = parseQuery(raw);
+    if (!p.code) return null;
+    var id = p.code.toUpperCase(), by = {}, list = [], prints = 0;
+    rows().forEach(function (r) {
+      if (String(r[1]).toUpperCase() !== id) return;
+      var code = r[3] || "BASE";
+      var v = by[code];
+      if (!v) {
+        var t = BY_CODE[code];
+        v = by[code] = { code: code, label: code === "BASE" ? "Base" : (t ? t.label : code), sets: [] };
+        list.push(v);
+      }
+      var set = r[4] + (isJp(r) ? " (JP)" : "");
+      if (v.sets.indexOf(set) !== -1) return;
+      prints++;
+      // The set the number was minted in leads; reprints follow.
+      if (r[7] && id.indexOf(r[7]) === 0) v.sets.unshift(set); else v.sets.push(set);
+    });
+    if (!list.length) return null;
+    list.sort(function (a, b) { return VERSION_ORDER.indexOf(a.code) - VERSION_ORDER.indexOf(b.code); });
+    return { code: id, current: p.treat ? p.treat.code : "BASE", prints: prints, list: list };
+  }
+
+  // The typed query with its printing swapped for another: every printing tag
+  // (and the filler word riding on one, "alt ART") comes out, the new tag goes
+  // on the end. A tag that is part of the character's name stays put.
+  function withTreatment(raw, code) {
+    var p = parseQuery(raw);
+    var toks = String(raw == null ? "" : raw).trim().split(/\s+/).filter(Boolean);
+    var out = [], dropped = false;
+    toks.forEach(function (tok) {
+      var t = tok.toLowerCase();
+      var isTag = BY_SHORTHAND[t] && t !== "sd" && t !== "st" && !isNameWord(p.code, t);
+      if (isTag) { dropped = true; return; }
+      if (dropped && TREAT_FILLER.test(t)) return;
+      dropped = false;
+      out.push(tok);
+    });
+    var t = BY_CODE[code];
+    if (t && code !== "BASE") out.push(t.type[0]);
+    return out.join(" ");
   }
 
   // Same splitter index.html uses, duplicated rather than imported so this file
@@ -915,6 +982,8 @@
     parseForRecents: parseForRecents,
     buildQuery: buildQuery,
     badge: badge,
+    versions: versions,
+    withTreatment: withTreatment,
     search: search,
     ready: ready,
     setNameFor: setNameFor,

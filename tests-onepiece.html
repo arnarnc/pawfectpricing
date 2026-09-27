@@ -29,6 +29,7 @@
      of the file it is testing. -->
 <script>document.write('<script src="onepiece.js?t=' + Date.now() + '"><\/script>');</script>
 <script src="cards_op.js"></script>
+<script src="cards_op_jp.js"></script>
 <script>
   const out = document.getElementById("out");
   let passed = 0, failed = 0;
@@ -410,6 +411,36 @@
     ok(loose.some(r => r.num === "OP01-016"), `an unpadded ID still finds the card`);
 
     ok((OP.search("luffy", 60) || []).length > 0, `a bare character name searches`);
+
+    group("Versions of one number");
+    const v = OP.versions("nami op01-016 aa");
+    ok(!!v && v.code === "OP01-016", `the typed ID is the one listed`);
+    ok(v && v.list[0].code === "BASE", `the base print comes first`, `got ${v && v.list.map(x => x.code)}`);
+    ok(v && ["AA", "MANGA", "SP"].every(c => v.list.some(x => x.code === c)),
+       `alt art, manga and SP are all listed`, `got ${v && v.list.map(x => x.code)}`);
+    eq(v && v.current, "AA", `the typed printing is the one lit`);
+    eq(v && v.list[0].sets[0], "Romance Dawn", `the set it was minted in leads the reprints`);
+    ok(v && v.list[0].sets.length > 1, `promo reprints of the base print are counted`);
+    eq(OP.versions("nami"), null, `no ID typed, nothing to list`);
+
+    eq(OP.withTreatment("PSA 10 Nami OP01-016 alt art nm", "MANGA"), "PSA 10 Nami OP01-016 nm manga",
+       `switching the printing swaps the tag and keeps everything else`);
+    eq(OP.withTreatment("Nami OP01-016 aa", "BASE"), "Nami OP01-016", `back to base drops the tag`);
+    eq(OP.withTreatment("Vinsmoke Judge OP06-062", "AA"), "Vinsmoke Judge OP06-062 aa",
+       `a tag that is the character's name stays put`);
+
+    group("Japanese-only prints (cards_op_jp.js)");
+    if (typeof CARDS_OP_JP !== "undefined" && CARDS_OP_JP.length) {
+      const jp = OP.search(CARDS_OP_JP[0][1], 60) || [];
+      ok(jp.length > 0 && jp.every(r => / jp$/.test(r.fill)),
+         `a Japanese-only print fills the box with "jp"`, `got ${jp.map(r => r.fill)}`);
+      ok(jp.every(r => /\(JP\)$/.test(r.set)), `and is labelled (JP)`);
+      const enIds = new Set(CARDS_OP.map(r => r[1]));
+      ok(CARDS_OP_JP.every(r => !enIds.has(r[1]) || !(OP.search(r[1], 60) || []).some(x => / jp$/.test(x.fill))),
+         `a card that is out in English is never shown as Japanese-only`);
+    } else {
+      ok(true, `no cards_op_jp.js loaded — skipped`);
+    }
   }
 
   summary.className = "sum " + (failed ? "fail" : "pass");

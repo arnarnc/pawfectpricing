@@ -455,6 +455,24 @@
     /* Which PRINTING the One Piece query is asking eBay for. Sits next to the
        raw/graded badge because on this game they are separate questions: an
        OP01-016 can be raw and still be the $2 print or the $2,000 one. */
+    /* Every printing of the typed One Piece number, the searched one lit. */
+    .versions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+    .ver-head {
+      width: 100%;
+      font-size: 11px; font-weight: 700; color: #38bdf8;
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .ver-chip {
+      min-height: 32px; padding: 0 12px;
+      border-radius: 999px; border: 1px solid var(--border);
+      background: transparent; color: var(--text2);
+      font-family: inherit; font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .ver-chip:hover { color: var(--text); border-color: var(--text3); }
+    .ver-chip.on { background: rgba(56,189,248,0.15); border-color: #38bdf8; color: #7dd3fc; }
+    .ver-n { opacity: 0.7; font-weight: 700; }
+    .ver-sets { width: 100%; font-size: 11px; color: var(--text3); line-height: 1.4; }
     .status-badge.print  { background: rgba(56,189,248,0.15); color: #38bdf8; margin-left: 6px; }
 
     /* ── Comp entry ── */
@@ -921,6 +939,7 @@
       .suggestions div { padding: 12px 14px; }
       .game-switch button { padding: 10px; font-size: 13.5px; }
       .chip span { min-height: 38px; padding: 0 14px; font-size: 13px; }
+      .ver-chip { min-height: 38px; padding: 0 14px; font-size: 13px; }
       .card-label-btn { padding: 6px 4px 6px 0; }
     }
 
@@ -1077,10 +1096,11 @@
 <script src="money.js?v=1"></script>
 <script src="recents.js?v=7"></script>
 <script src="compsearch.js?v=1"></script>
-<script src="onepiece.js?v=4"></script>
+<script src="onepiece.js?v=6"></script>
 <script src="cards.js"></script>
 <script src="cards_jp.js"></script>
 <script src="cards_op.js"></script>
+<script src="cards_op_jp.js"></script>
 <script>
   const TRAINER_NAMES = ["Ash Ketchum","Leon","Cynthia","Steven Stone","Red","Lance","Diantha","Iris","Alder","Blue / Gary Oak","N","Giovanni","Guzma","Gladion","Cyrus","Silver","Wally","Hop","Marnie","Bede","Nemona","Arven","Penny","Geeta","Rika","Poppy","Larry","Hassel","Lorelei","Bruno","Agatha","Will","Koga","Karen","Sidney","Phoebe","Glacia","Drake","Aaron","Bertha","Flint","Lucian","Shauntal","Marshal","Grimsley","Caitlin","Malva","Wikstrom","Drasna","Siebold","Kahili","Molayne","Olivia","Acerola","Hapu","Brock","Misty","Lt. Surge","Erika","Sabrina","Blaine","Whitney","Bugsy","Morty","Chuck","Jasmine","Pryce","Clair","Roxanne","Brawly","Wattson","Flannery","Norman","Winona","Tate & Liza","Wallace","Juan","Roark","Gardenia","Fantina","Maylene","Crasher Wake","Byron","Candice","Volkner","Cilan","Chili","Cress","Lenora","Burgh","Elesa","Clay","Skyla","Brycen","Drayden","Roxie","Marlon","Cheren","Viola","Grant","Korrina"];
 
@@ -1647,9 +1667,40 @@
     // between them is a two-letter tag that is easy to forget to type.
     if (game === "op" && !exactSearch) {
       const print = OnePiece.badge(value);
-      if (print) statusEl.innerHTML += `<span class="status-badge print">🏴 ${escHtml(print)}</span>`;
+      const vers  = versionsHtml(value);
+      // The version chips already highlight the printing being searched; the
+      // badge stays only for what they can't say: "not on this number".
+      if (print && (!vers || /not on this number/.test(print)))
+        statusEl.innerHTML += `<span class="status-badge print">🏴 ${escHtml(print)}</span>`;
+      statusEl.innerHTML += vers;
     }
     renderSuggestions();
+  }
+
+  // ── One Piece: every version of the typed number ──────────
+  // One ID can be a $2 card and a $2,000 one: base, alt art, manga, SP, and
+  // the same art again in promo products (the stamped reprints). Once an ID is
+  // typed, each printing the catalogue holds is a chip; the one being searched
+  // is lit, and tapping another re-aims the search at it.
+  function versionsHtml(value) {
+    const v = OnePiece.versions(value);
+    if (!v || v.prints < 2) return "";
+    const cur = v.list.find(x => x.code === v.current);
+    const chips = v.list.map(x =>
+      `<button type="button" class="ver-chip${x.code === v.current ? " on" : ""}"`
+      + ` title="${escHtml(x.sets.join(" · "))}" onclick="pickVersion('${x.code}')">`
+      + escHtml(x.label)
+      + (x.sets.length > 1 ? ` <span class="ver-n">×${x.sets.length}</span>` : "")
+      + `</button>`).join("");
+    const sets = cur && cur.sets.length > 1
+      ? `<div class="ver-sets">${escHtml(cur.label)} is in: ${escHtml(cur.sets.join(" · "))}</div>` : "";
+    return `<div class="versions"><div class="ver-head">${escHtml(v.code)} · ${v.prints} versions</div>${chips}${sets}</div>`;
+  }
+  function pickVersion(code) {
+    const ci = document.getElementById("cardInput");
+    ci.value = OnePiece.withTreatment(ci.value, code);
+    update();
+    closeSuggestions();
   }
 
   function renderSuggestions() {
