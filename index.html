@@ -1803,29 +1803,15 @@
   // outside it. Removing the rewriting without removing the dropdown would
   // leave the dropdown filling the box with wording nothing downstream wants.
   //
-  // So One Piece is now type-what-you-mean: the box is yours, the query is
-  // close to what you typed (see onepiece.js), and the only rows offered are
-  // searches you have actually run before. The Pokemon side keeps its full
+  // So One Piece is now type-what-you-mean: the box is yours, and the query is
+  // close to what you typed (see onepiece.js). It has no dropdown at all, not
+  // even recent searches: the version chips under the box (base / alt / manga
+  // / SP and the products each came in) are what you read while typing, and a
+  // menu would sit right on top of them. The Pokemon side keeps its full
   // dropdown — its query still needs a name AND a collector number, so helping
   // you produce a correct pair is worth the funnel there.
-  function renderOpSuggestions(value) {
-    cardLookupSeq++;                       // nothing in flight can outlive this
-    clearTimeout(cardLookupTimer);
-    if (cardLookupCtrl) cardLookupCtrl.abort();
-
-    const p = OnePiece.parseQuery(value);
-    paintRecentsOnly(recentRows(nameCores(p.name.join(" ")), p.code || p.setCode, ""));
-  }
-
-  // Recents and nothing else: no catalogue rows, and no offline name list
-  // either (that list is where "Monkey.D.Luffy" came from in the first place).
-  function paintRecentsOnly(recents) {
-    const box = document.getElementById("suggestions");
-    const sig = "op:" + recents.map(r => r.name + "|" + r.t).join("~");
-    if (sig === lastSuggestSig) return;
-    lastSuggestSig = sig;
-    box.innerHTML = "";
-    recents.forEach(r => box.appendChild(makeCardRow(r)));
+  function renderOpSuggestions() {
+    closeSuggestions();   // also cancels anything still in flight
   }
 
   // ── Recent searches ───────────────────────────────────────
