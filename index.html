@@ -532,7 +532,7 @@
     .card-label {
       color: var(--text);
       font-weight: 500;
-      word-break: break-word;
+      overflow-wrap: break-word;
       padding-right: 4px;
     }
     /* The comp row's card name doubles as "look this one up again" — it drops
@@ -594,10 +594,10 @@
       background: transparent;
       border: none;
       color: var(--text3);
-      width: 28px; height: 28px;
+      width: 36px; height: 36px;
       border-radius: var(--r-sm);
       cursor: pointer;
-      font-size: 18px;
+      font-size: 22px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -605,16 +605,19 @@
     }
     .del-btn:hover { color: #f87171; background: rgba(248,113,113,0.1); }
 
-    .row-actions { display: flex; align-items: center; gap: 2px; justify-content: flex-end; }
+    /* Stays a real table cell so it centres against a name that wraps. */
+    .comp-table td.row-actions { text-align: right; white-space: nowrap; }
+    .row-actions > button { display: inline-flex; vertical-align: middle; }
+    .row-actions > button + button { margin-left: 4px; }
 
     .strike-btn {
       background: transparent;
       border: none;
       color: var(--text3);
-      width: 28px; height: 28px;
+      width: 36px; height: 36px;
       border-radius: var(--r-sm);
       cursor: pointer;
-      font-size: 15px;
+      font-size: 19px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -907,8 +910,9 @@
     @media (pointer: coarse) {
       /* iOS zooms the page into any field under 16px when it is focused. */
       input, select, textarea { font-size: 16px !important; }
-      .comp-pct-select { width: 72px; }
-      .del-btn, .strike-btn { width: 38px; height: 38px; }
+      .del-btn, .strike-btn { width: 42px; height: 42px; background: var(--surface2); }
+      .del-btn { font-size: 24px; }
+      .strike-btn { font-size: 20px; }
       .sync-link { width: 36px; height: 36px; }
       .icon-add-btn { width: 36px; height: 36px; }
       .clear-btn { width: 32px; height: 32px; right: 8px; }
@@ -936,23 +940,18 @@
       .btn-row a .btn-sub   { font-size: 11px; }
       .btn-row a .btn-icon  { font-size: 19px; }
 
-      /* Comp rows stack: the card name gets the full width on its own line
-         and the price / offer / actions sit under it, instead of four columns
-         squeezing the name to a letter per line. */
-      .comp-table thead { display: none; }
-      .comp-table, .comp-table tbody { display: block; }
-      .comp-table tr.item-row {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 6px 8px;
-        padding: 10px 0;
-        border-bottom: 1px solid var(--border2);
+      /* One line per row: the card name takes whatever the price, offer and
+         the two row buttons leave, and wraps between words if it must. */
+      .card { padding-left: 14px; padding-right: 14px; }
+      .comp-table thead th { padding: 0 3px 8px; }
+      .comp-table tbody td { padding: 8px 3px; }
+      .comp-price-input { width: 70px; }
+      .comp-pct-select {
+        width: 56px;
+        -webkit-appearance: none; appearance: none;
+        text-align: center; text-align-last: center;
+        padding: 6px 2px;
       }
-      .comp-table tr.item-row:last-child { border-bottom: none; }
-      .comp-table tbody td { padding: 0; border: none; }
-      .comp-table tbody td:first-child { flex: 1 1 100%; }
-      .comp-table td.row-actions { margin-left: auto; }
     }
 
     /* ── Desktop ── */
