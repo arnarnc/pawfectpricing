@@ -117,7 +117,7 @@
   // bare keywords, so demanding "japanese" loses everybody who wrote "JP" and
   // demanding "jp" loses everybody who wrote it out.
   var LANG_SEARCH = {
-    japanese: ["japanese", "jap", "jp", "jpn"],
+    japanese: ["japanese", "japan", "jap", "jp", "jpn"],
     chinese: ["chinese", "cn", "chn", "china"],
     korean: ["korean", "kor", "kr", "korea"]
   };
@@ -129,10 +129,21 @@
   var NOT_ENGLISH = ["japanese", "japan", "jap", "jp", "jpn", "nihongo",
                      "chinese", "china", "cn", "chn",
                      "korean", "korea", "kr", "kor",
-                     "indonesian", "indonesia"];
+                     "indonesian", "indonesia",
+                     // Bandai's Asia-English print run: English text, sold
+                     // cheaper, and titled "Asia" / "Asian" by the sellers who
+                     // know the difference.
+                     "asia", "asian"];
 
   // eBay's any-of syntax: (alt,alternate,parallel). No spaces inside -- a
   // space ends the group and the rest becomes separate ANDed keywords.
+  //
+  // Only ever used to ASK. Measured on ebay.com.au: an ask group is a real
+  // union ("(alt,alternate,parallel)" 765 results against 619 for its best
+  // single word), but a NEGATED group of fifteen or so words gets the whole
+  // search refused as "expensive keywords" -- no results page at all -- while
+  // the same words as separate -terms return exactly what the group did (688
+  // and 688) and still work at 68 of them. So exclusions go out one by one.
   function orGroup(words) {
     var list = (words || []).filter(Boolean);
     if (!list.length) return "";
@@ -145,7 +156,12 @@
     var want = String(lang || "").toLowerCase();
     if (want && want !== "english" && LANG_SEARCH[want]) return orGroup(LANG_SEARCH[want]);
     if (want && want !== "english") return want;
-    return "-" + orGroup(NOT_ENGLISH);
+    return negate(NOT_ENGLISH);
+  }
+
+  // Words to subtract, as separate -terms (see orGroup for why never a group).
+  function negate(words) {
+    return (words || []).filter(Boolean).map(function (w) { return "-" + w; }).join(" ");
   }
 
   // How to ask for a printing, and how to shut the other printings of the same
@@ -188,7 +204,10 @@
     // plain print is the one card nobody describes that way.
     AA:     { ask: ["alt", "alternate", "parallel"],
               veto: ["alt", "alternate", "parallel"], altWording: true },
-    SP:     { ask: ["sp"], veto: ["sp"] },
+    // Sellers write "Special Alt Art", "Special Holo", "Special Foil" as often
+    // as "SP" -- and every one of those also says "alt art", so without
+    // "special" an SP walks straight into the alternate-art search.
+    SP:     { ask: ["sp", "special"], veto: ["sp", "special"] },
     MANGA:  { ask: ["manga", "comic"], veto: ["manga", "comic"] },
     TR:     { ask: ["treasure", "tr"], veto: ["treasure"] },
     TF:     { ask: ["textured"], veto: ["textured"] },
@@ -201,6 +220,149 @@
     PF:     { ask: [], veto: [] },
     BASE:   { ask: [], veto: [] }
   };
+
+  // ── Reprints of one number ────────────────────────────────
+  // The same number is reprinted in promo products -- Gift Collection foils,
+  // the 25th-edition premium collection, PRB "The Best" reprints, tournament
+  // and event packs (the stamped ones), later starter decks -- and each sells
+  // at its own price. The catalogue knows which products reprinted a number,
+  // so a search for the ORIGINAL subtracts the words sellers use for those
+  // products, and typing one of those words searches that product instead.
+  //
+  // Matched on the catalogue's set name. `words` is what gets subtracted,
+  // `words[0]` is what the version chip adds when you pick that product. Only
+  // words that name the PRODUCT -- nothing a plain listing of the original
+  // would carry. Booster sets that reprint a card (EB04 cards inside OP14) are
+  // not here: that is the same card in a different pack.
+  var PRODUCT_RULES = [
+    { re: /the best/i,                  words: ["prb", "reprint", "prb01", "prb02", "best"] },
+    { re: /gift collection/i,           words: ["gift"] },
+    { re: /25th/i,                      words: ["25th"] },
+    { re: /premium card collection/i,   words: ["premium"] },
+    { re: /anniversary/i,               words: ["anniversary"] },
+    { re: /tournament pack/i,           words: ["tournament"] },
+    { re: /championship|^cs \d/i,       words: ["championship", "celebration"] },
+    { re: /top players? pack/i,         words: ["championship", "celebration"] },
+    { re: /event pack/i,                words: ["event"] },
+    { re: /participation pack/i,        words: ["participation", "regional"] },
+    { re: /welcome pack/i,              words: ["welcome"] },
+    { re: /dash pack/i,                 words: ["dash"] },
+    { re: /treasure campaign/i,         words: ["campaign"] },
+    { re: /prize/i,                     words: ["prize"] },
+    { re: /battle kit/i,                words: ["kit"] },
+    { re: /ultra deck/i,                words: ["ultra", "st10"] },
+    { re: /film red/i,                  words: ["film"] },
+    { re: /promo/i,                     words: ["promo", "promotion"] }
+  ];
+  // Which of those products are promos (as against a reprint booster, a deck).
+  var PROMO_PRODUCT = /gift|25th|premium card|anniversary|pack|prize|promo|kit|film red/i;
+  var PRODUCT_WORDS = {};
+  PRODUCT_RULES.forEach(function (r) { r.words.forEach(function (w) { PRODUCT_WORDS[w] = 1; }); });
+
+  // The words that name the product one catalogue row came in, or [] when the
+  // row IS the original printing (or a booster reprint, see above). A later
+  // starter deck is named by its code, plus "starter" when the card did not
+  // start life in a starter deck itself.
+  function productWords(r, id) {
+    var prefix = String(id).split("-")[0].toUpperCase();
+    if (r[7] && r[7] === prefix) return [];
+    // Every rule the name matches, not the first: "Premium Card Collection
+    // -25th Edition-" is titled "25th" by some sellers and "Premium" by others.
+    var words = [];
+    PRODUCT_RULES.forEach(function (rule) {
+      if (rule.re.test(r[4])) rule.words.forEach(function (w) { if (words.indexOf(w) === -1) words.push(w); });
+    });
+    if (words.length) return words;
+    if (/^ST\d+$/.test(r[7] || "")) {
+      var code = r[7].toLowerCase();
+      return /^ST/.test(prefix) ? [code] : [code, "starter"];
+    }
+    return [];
+  }
+
+  // The product the query is asking for, from what was typed: the product
+  // words present, or none (= the original printing).
+  function typedProducts(typed) {
+    return (typed || []).filter(function (w) { return PRODUCT_WORDS[w] || /^st\d+$/.test(w); });
+  }
+
+  // Everything to subtract for the reprints of this number in the printing
+  // being searched, less anything typed or anything in the card's own name.
+  function reprintVetoes(p, typed) {
+    if (!p.code || (p.lang && p.lang !== "english")) return [];
+    var id = p.code.toUpperCase();
+    // A promo ID ("P-001") was never in a booster: every row of it is a promo
+    // product, so there is no "original" to protect from its reprints.
+    if (!/\d/.test(id.split("-")[0])) return [];
+    var asked = p.treat ? p.treat.code : "BASE";
+    var wanted = typedProducts(typed);
+    var mine = rows().filter(function (r) { return String(r[1]).toUpperCase() === id; });
+
+    // Every product of the NUMBER, not just of this printing: the catalogue
+    // files a reprint under one printing ("Gift Collection 2023" as the plain
+    // print) while sellers title the same card "Promo Alt Art", so a search for
+    // the Romance Dawn alternate art still drew Gift Collection and 25th
+    // listings when only its own printing's reprints were subtracted.
+    //
+    // The exception is a printing that ONLY exists as a reprint -- an alt art
+    // that came in the 25th collection and nowhere else. Its own products are
+    // then what is being asked for, and stay in.
+    var askedRows = mine.filter(function (r) { return (r[3] || "BASE") === asked; });
+    var hasOriginal = askedRows.some(function (r) { return !productWords(r, id).length; });
+    var keep = [];
+    if (!hasOriginal) askedRows.forEach(function (r) { keep = keep.concat(productWords(r, id)); });
+
+    var out = [], promo = false;
+    mine.forEach(function (r) {
+      var words = productWords(r, id);
+      // The product that was asked for is never subtracted -- none of its words.
+      if (!words.length || words.some(function (w) { return wanted.indexOf(w) !== -1; })) return;
+      if (words.some(function (w) { return keep.indexOf(w) !== -1; })) return;
+      // Sellers copy TCGplayer's catalogue name, "One Piece Promotion Cards",
+      // onto every promo product. A booster card with any promo reprint gets
+      // those two words subtracted as well.
+      if (PROMO_PRODUCT.test(r[4])) promo = true;
+      words.forEach(function (w) { if (out.indexOf(w) === -1) out.push(w); });
+    });
+    if (promo && !wanted.length) ["promo", "promotion"].forEach(function (w) { if (out.indexOf(w) === -1) out.push(w); });
+    // A card that started life in a booster and is listed as "Starter Deck"
+    // is a deck reprint -- decks keep reprinting booster staples (ST-31 and
+    // ST-35 both carry OP01-016), newer than any catalogue snapshot.
+    if (!wanted.length && !/^ST/.test(id) && out.indexOf("starter") === -1) out.push("starter");
+    return out.filter(function (w) { return typed.indexOf(w) === -1 && !isNameWord(id, w); });
+  }
+
+  // Things that are not the card at all, and the fakes: sleeves and binders
+  // printed with the art, acrylic "display only" cases, extended-art slab
+  // inserts, proxies and custom orica, and playsets / lots that sell several
+  // copies under one price. Measured on the manga Luffy OP05-119: most of the
+  // first page was binders, cases, inserts, a playmat and a rug.
+  //
+  // Most important first: when a query runs long (see MAX_NEGATIVES) it is
+  // the tail of this list that is dropped.
+  var NOT_A_SINGLE = ["proxy", "custom", "orica", "replica", "playset", "lot", "binder",
+                      "acrylic", "insert", "extended", "album", "playmat", "sleeve", "sleeves",
+                      "sticker", "rug", "keyring", "keychain", "novelty"];
+
+  // How many -terms one query may carry. Measured: 68 went through; this
+  // leaves headroom. A card with a long reprint history sheds the least
+  // useful junk words first -- printings, languages and reprints always stay.
+  var MAX_NEGATIVES = 60;
+
+  // A slab search names its grader; the other graders' slabs are a different
+  // price for the same number.
+  var GRADER_WORDS = ["psa", "bgs", "cgc", "tag", "sgc", "ars", "beckett"];
+  function graderVetoes(typed) {
+    var named = GRADER_WORDS.filter(function (g) { return typed.indexOf(g) !== -1; });
+    if (!named.length) return [];
+    if (named.indexOf("bgs") !== -1 || named.indexOf("beckett") !== -1) named = named.concat(["bgs", "beckett"]);
+    return GRADER_WORDS.filter(function (g) { return named.indexOf(g) === -1; });
+  }
+
+  // Sealed junk: empty and opened boxes, fakes sold by piece count ("300pcs"),
+  // 3D-printed display cases, and -- unless a case was asked for -- the
+  // 12-box case, which is twelve times the price of the box.
+  var NOT_SEALED = ["empty", "opened", "pcs", "proxy", "custom", "replica", "3d"];
 
   // Vetoes come out in this order whatever order the catalogue lists the
   // printings in, so one card always produces one query. TREATMENTS is the
@@ -300,7 +462,7 @@
         if (!seen[w]) { seen[w] = 1; words.push(w); }
       });
     });
-    if (words.length) out.push("-" + orGroup(words));
+    if (words.length) out.push(negate(words));
     return out;
   }
 
@@ -735,7 +897,20 @@
       // set name alone returns both -- and the box is the bigger ticket of the
       // two, so getting it wrong costs more. It used to be dropped outright:
       // "op17 bbx jp" searched the English box and threw the "jp" away.
-      return ["one piece", setName].concat(p.extras, p.name, [langTerms(p.lang)])
+      //
+      // A Japanese box is searched by its CODE, not the English set name:
+      // Japan has its own English titles for its sets (OP-05 is "Protagonist
+      // of the New Generation" there), so the English name found 30 Japanese
+      // OP-05 boxes where "(op05,op-05)" found 63. An English box keeps the
+      // name -- by code it pulled in "OP05 Series Cards 300pcs" fakes.
+      var jp = p.lang && p.lang !== "english";
+      var code = p.setCode.toLowerCase();
+      var codeForms = [code, code.replace(/^([a-z]+)(\d+)$/, "$1-$2")];
+      var typedS = typedWords(raw);
+      var junk = NOT_SEALED.concat(/\bcase\b/i.test(String(raw)) ? [] : ["case"])
+        .filter(function (w) { return typedS.indexOf(w) === -1; });
+      return ["one piece", jp ? orGroup(codeForms) : setName]
+        .concat(p.extras, p.name, [langTerms(p.lang), negate(junk)])
         .join(" ").trim();
     }
 
@@ -746,7 +921,14 @@
       if (/^[A-Z]+-/.test(p.code) && !/\d/.test(p.code.split("-")[0])) parts.push("one piece");
       parts.push(p.code);
     }
-    parts = parts.concat(p.name, printTerms(p, typedWords(raw)), p.extras);
+    var typed = typedWords(raw);
+    parts = parts.concat(p.name, printTerms(p, typed), p.extras);
+    if (p.code && !p.sealed) {
+      var extra = reprintVetoes(p, typed)
+        .concat(NOT_A_SINGLE, graderVetoes(typed))
+        .filter(function (w) { return typed.indexOf(w) === -1; });
+      if (extra.length) parts.push(negate(extra));
+    }
 
     // Nothing recognisable was typed -- a free-text search this module has no
     // business rewriting. Hand back exactly what was in the box. Checked
@@ -762,9 +944,14 @@
     parts.push(langTerms(p.lang));
 
     var seen = {};
-    return parts.join(" ").split(/\s+/)
-      .filter(function (w) { return w && !seen[w] && (seen[w] = 1); })
-      .join(" ");
+    var out = parts.join(" ").split(/\s+/)
+      .filter(function (w) { return w && !seen[w] && (seen[w] = 1); });
+    var over = out.filter(function (w) { return w.charAt(0) === "-"; }).length - MAX_NEGATIVES;
+    for (var i = NOT_A_SINGLE.length - 1; over > 0 && i >= 0; i--) {
+      var at = out.indexOf("-" + NOT_A_SINGLE[i]);
+      if (at !== -1) { out.splice(at, 1); over--; }
+    }
+    return out.join(" ");
   }
 
   // The chip under the search box: says, in words, which printing the query is
@@ -926,18 +1113,23 @@
       var v = by[code];
       if (!v) {
         var t = BY_CODE[code];
-        v = by[code] = { code: code, label: code === "BASE" ? "Base" : (t ? t.label : code), sets: [] };
+        v = by[code] = { code: code, label: code === "BASE" ? "Base" : (t ? t.label : code), sets: [], products: [] };
         list.push(v);
       }
       var set = r[4] + (isJp(r) ? " (JP)" : "");
       if (v.sets.indexOf(set) !== -1) return;
       prints++;
+      var words = productWords(r, id);
+      var prod = { name: set, word: words[0] || "" };
       // The set the number was minted in leads; reprints follow.
-      if (r[7] && id.indexOf(r[7]) === 0) v.sets.unshift(set); else v.sets.push(set);
+      if (r[7] && id.indexOf(r[7]) === 0) { v.sets.unshift(set); v.products.unshift(prod); }
+      else { v.sets.push(set); v.products.push(prod); }
     });
     if (!list.length) return null;
     list.sort(function (a, b) { return VERSION_ORDER.indexOf(a.code) - VERSION_ORDER.indexOf(b.code); });
-    return { code: id, current: p.treat ? p.treat.code : "BASE", prints: prints, list: list };
+    var typed = typedProducts(typedWords(raw));
+    return { code: id, current: p.treat ? p.treat.code : "BASE", prints: prints, list: list,
+             product: typed[0] || "" };
   }
 
   // The typed query with its printing swapped for another: every printing tag
@@ -957,6 +1149,18 @@
     });
     var t = BY_CODE[code];
     if (t && code !== "BASE") out.push(t.type[0]);
+    return out.join(" ");
+  }
+
+  // The typed query aimed at one product of the number: every product word
+  // comes out, the new one (if any -- "" is the original printing) goes on.
+  function withProduct(raw, word) {
+    var toks = String(raw == null ? "" : raw).trim().split(/\s+/).filter(Boolean);
+    var out = toks.filter(function (tok) {
+      var t = tok.toLowerCase();
+      return !(PRODUCT_WORDS[t] || /^st\d+$/.test(t));
+    });
+    if (word) out.push(word);
     return out.join(" ");
   }
 
@@ -984,6 +1188,7 @@
     badge: badge,
     versions: versions,
     withTreatment: withTreatment,
+    withProduct: withProduct,
     search: search,
     ready: ready,
     setNameFor: setNameFor,

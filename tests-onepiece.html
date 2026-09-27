@@ -74,15 +74,16 @@
   //   qPrint  the same, but the printing exclusions kept
   //   qAll    the query whole
   //
-  // The language term is stripped first, so what is left to strip is exactly
-  // the printing vetoes.
-  const LANG_TERM = /\s*-?\((?:japanese|chinese|korean)[^)]*\)/g;
-  const VETO_TERM = /\s*-(?:\([^)]*\)|[a-z]+)/g;
+  // Every exclusion is its own "-word" term (a negated bracket group gets the
+  // whole eBay search refused), so the readers work token by token.
+  const PRINT_VETO = new Set(["alt", "alternate", "parallel", "manga", "comic", "sp", "special",
+    "treasure", "textured", "pandaman", "panda", "serial", "winner", "judge", "wanted"]);
   const qAll = s => OP.buildQuery(s);
-  const qLang = s => qAll(s).replace(VETO_TERM, "").replace(/\s+/g, " ").trim();
-  const qPrint = s => qAll(s).replace(LANG_TERM, "").replace(/\s+/g, " ").trim();
-  const q = s => qAll(s).replace(LANG_TERM, "").replace(VETO_TERM, "")
-                        .replace(/\s+/g, " ").trim();
+  const toks = s => qAll(s).split(" ").filter(Boolean);
+  const isLangAsk = t => /^\((?:japanese|chinese|korean)/.test(t);
+  const qLang = s => toks(s).filter(t => t[0] !== "-").join(" ");
+  const qPrint = s => toks(s).filter(t => t[0] !== "-" ? !isLangAsk(t) : PRINT_VETO.has(t.slice(1))).join(" ");
+  const q = s => toks(s).filter(t => t[0] !== "-" && !isLangAsk(t)).join(" ");
 
   // ── The query is what you typed ────────────────────────────
   group("The query stays close to what was typed");
@@ -162,8 +163,8 @@
   eq(q("op01-016 alt"), "OP01-016 (alt,alternate,parallel)",
      `an alt asks for all three spellings sellers use, and agree on none of`);
   eq(q("op01-016 aa"), "OP01-016 (alt,alternate,parallel)", `"aa" is the same printing`);
-  eq(q("op09-001 sp"), "OP09-001 sp",
-     `an SP asks for "sp" and subtracts nothing -- requiring the word IS the exclusion`);
+  eq(q("op09-001 sp"), "OP09-001 (sp,special)",
+     `an SP asks for "sp" or "special" -- "Special Alt Art" is how half of them are titled`);
   ok(q("op09-001 sp").indexOf("-alt") === -1,
      `...and never "-alt": half the SP listings in the world are titled "SP Alt Art"`,
      `got ${q("op09-001 sp")}`);
@@ -185,28 +186,28 @@
   // which one, and the catalogue says which others exist to be excluded.
   group("The printings that share the number are excluded — the ones that exist");
   // OP01-016 Nami is four cards: plain, alternate art, manga art, SP.
-  eq(qPrint("op01-016"), "OP01-016 -(alt,alternate,parallel,manga,comic,sp)",
+  eq(qPrint("op01-016"), "OP01-016 -alt -alternate -parallel -manga -comic -sp -special",
      `a tagless ID is the PLAIN print, so every other printing of it goes`);
   eq(qPrint("op01-016 base"), qPrint("op01-016"), `typing "base" says the same thing`);
-  eq(qPrint("nami op01-016"), "OP01-016 nami -(alt,alternate,parallel,manga,comic,sp)",
+  eq(qPrint("nami op01-016"), "OP01-016 nami -alt -alternate -parallel -manga -comic -sp -special",
      `a name alongside the ID does not change what printing was claimed`);
 
   // The whole reason the catalogue is asked rather than a fixed list used.
   // OP09-001 has one sibling, an alternate art. Subtracting "manga" there would
   // be subtracting listings to protect against a card that does not exist.
-  eq(qPrint("op09-001"), "OP09-001 -(alt,alternate,parallel)",
+  eq(qPrint("op09-001"), "OP09-001 -alt -alternate -parallel",
      `a number with only an alt art excludes only the alt art`);
   ok(qPrint("op09-001").indexOf("manga") === -1,
      `nothing is subtracted for a printing this number does not have`,
      `got ${qPrint("op09-001")}`);
 
   // Both directions of the same fact: a named printing excludes its siblings too.
-  eq(qPrint("op01-016 alt"), "OP01-016 (alt,alternate,parallel) -(manga,comic,sp)",
+  eq(qPrint("op01-016 alt"), "OP01-016 (alt,alternate,parallel) -manga -comic -sp -special",
      `an alt art is not comped against the manga art or the SP of its number`);
-  eq(qPrint("op01-016 manga"), "OP01-016 (manga,comic) -sp",
+  eq(qPrint("op01-016 manga"), "OP01-016 (manga,comic) -sp -special",
      `...nor a manga art against the SP`);
-  eq(qPrint("op01-016 sp"), "OP01-016 sp -(manga,comic)", `...nor an SP against the manga`);
-  eq(qPrint("op16-098 alt"), "OP16-098 (alt,alternate,parallel) -sp",
+  eq(qPrint("op01-016 sp"), "OP01-016 (sp,special) -manga -comic", `...nor an SP against the manga`);
+  eq(qPrint("op16-098 alt"), "OP16-098 (alt,alternate,parallel) -sp -special",
      `Yamato OP16-098 has an SP and no manga, and the query says exactly that`);
 
   // The asymmetry that keeps this from eating the listings it aims at.
@@ -214,7 +215,7 @@
     ok(qAll(t).indexOf("-(alt") === -1 && !/-alt/.test(qAll(t)),
        `"${t}" never subtracts the alt words`,
        `got ${qAll(t)}`));
-  ok(/-\(alt,alternate,parallel/.test(qAll("op01-016")),
+  ok(/ -alt -alternate -parallel/.test(qAll("op01-016")),
      `...but the plain print does, because it is the one card nobody calls an alt`,
      `got ${qAll("op01-016")}`);
 
@@ -242,20 +243,21 @@
   group("Language: ask for a foreign one, exclude the others");
   // Read with the printing exclusions stripped: a Japanese card with no tag is
   // still a base print and still excludes the alt and the SP of its number.
-  eq(qLang("op01-016 jp"), "OP01-016 (japanese,jap,jp,jpn)",
+  eq(qLang("op01-016 jp"), "OP01-016 (japanese,japan,jap,jp,jpn)",
      `jp asks for every spelling sellers use, not just the long one`);
-  eq(qLang("op01-016 japanese"), "OP01-016 (japanese,jap,jp,jpn)", `typed out, same group`);
+  eq(qLang("op01-016 japanese"), "OP01-016 (japanese,japan,jap,jp,jpn)", `typed out, same group`);
   eq(qLang("op01-016 cn"), "OP01-016 (chinese,cn,chn,china)", `cn -> the Chinese group`);
   eq(qLang("op01-016 kr"), "OP01-016 (korean,kor,kr,korea)", `kr -> the Korean group`);
-  ok(qAll("op01-016 jp").indexOf("-(japanese") === -1,
+  ok(!/ -japanese/.test(qAll("op01-016 jp")),
      `a foreign card excludes no LANGUAGE -- asking for its own already did that`,
      `got ${qAll("op01-016 jp")}`);
-  eq(qAll("op01-016 aa jp"),
-     "OP01-016 (alt,alternate,parallel) -(manga,comic,sp) (japanese,jap,jp,jpn)",
+  eq(qLang("op01-016 aa jp"), "OP01-016 (alt,alternate,parallel) (japanese,japan,jap,jp,jpn)",
      `printing and language are independent: a Japanese alt asks for both`);
+  ok(/ -manga -comic -sp -special/.test(qAll("op01-016 aa jp")),
+     `...and still subtracts the other printings`, `got ${qAll("op01-016 aa jp")}`);
 
   const english = qAll("op01-016");
-  ok(/-\(japanese,/.test(english),
+  ok(/ -japanese /.test(english),
      `no language typed means English, and English is a claim: the others go`,
      `got ${english}`);
   ["japan", "jap", "jp", "chinese", "cn", "korean", "kr"].forEach(w =>
@@ -267,7 +269,7 @@
      `got ${english}`);
 
   // The whole point of the two groups sitting side by side.
-  ok(/-\(manga,comic,sp\)/.test(qAll("op01-016 alt")) && /-\(japanese/.test(qAll("op01-016 alt")),
+  ok(/ -manga -comic -sp/.test(qAll("op01-016 alt")) && / -japanese/.test(qAll("op01-016 alt")),
      `an English alt excludes the other printings of its number AND every other
       language of it`,
      `got ${qAll("op01-016 alt")}`);
@@ -329,7 +331,7 @@
   ok(/\bswallow bond en avant\b/.test(qAll("swallow bond en avant op15-096 jp")),
      `"en" inside a card's name is not the English language`,
      `got ${qAll("swallow bond en avant op15-096 jp")}`);
-  ok(/\(japanese,jap,jp,jpn\)/.test(qAll("swallow bond en avant op15-096 jp")),
+  ok(/\(japanese,japan,jap,jp,jpn\)/.test(qAll("swallow bond en avant op15-096 jp")),
      `...and the "jp" typed after it is still heard — it used to be swallowed,
       because the name had already claimed the language`,
      `got ${qAll("swallow bond en avant op15-096 jp")}`);
@@ -344,11 +346,11 @@
   // Two tags is a contradiction the box cannot resolve -- only one of them is
   // the card in your hand -- but it must never be resolved by excluding the
   // other one. The query would then say never-manga while the box says manga.
-  eq(qPrint("op01-016 alt manga"), "OP01-016 (alt,alternate,parallel) -sp",
+  eq(qPrint("op01-016 alt manga"), "OP01-016 (alt,alternate,parallel) -sp -special",
      `"alt manga": the alt is searched, the manga is NOT excluded`);
-  eq(qPrint("op01-016 comic alt"), "OP01-016 (manga,comic) -sp",
+  eq(qPrint("op01-016 comic alt"), "OP01-016 (manga,comic) -sp -special",
      `...whichever spelling was typed — "comic" protects the manga art too`);
-  eq(qPrint("op01-016 aa sp"), "OP01-016 (alt,alternate,parallel) -(manga,comic)",
+  eq(qPrint("op01-016 aa sp"), "OP01-016 (alt,alternate,parallel) -manga -comic",
      `"aa sp": the SP survives, the manga art does not`);
 
   group("The catalogue says when a printing is not on that number");
@@ -365,13 +367,62 @@
   // are titled with the set's name, and the set name alone returns both -- and
   // the box is the bigger ticket, so getting it wrong costs more. The "jp" used
   // to be thrown away here entirely.
-  ok(/\(japanese,jap,jp,jpn\)/.test(qAll("op17 bbx jp")),
+  ok(/\(japanese,japan,jap,jp,jpn\)/.test(qAll("op17 bbx jp")),
      `"op17 bbx jp" asks for the Japanese box`, `got ${qAll("op17 bbx jp")}`);
-  ok(/-\(japanese/.test(qAll("op17 bbx")),
+  ok(/ -japanese/.test(qAll("op17 bbx")),
      `...and an unmarked box is the English one, same as a card`,
      `got ${qAll("op17 bbx")}`);
-  ok(/world's strongest warriors/i.test(qAll("op17 bbx jp")),
-     `the set name survives the language`, `got ${qAll("op17 bbx jp")}`);
+  ok(/\(op17,op-17\)/.test(qAll("op17 bbx jp")) && !/warriors/i.test(qAll("op17 bbx jp")),
+     `a Japanese box is searched by its code -- Japan titles its sets in its own English`,
+     `got ${qAll("op17 bbx jp")}`);
+  ok(/world's strongest warriors/i.test(qAll("op17 bbx")),
+     `an English box keeps the set name`, `got ${qAll("op17 bbx")}`);
+
+  group("Sealed junk");
+  ["empty", "opened", "pcs", "case"].forEach(w =>
+    ok(new RegExp(" -" + w + "\\b").test(qAll("op05 bbx")), `a box search subtracts "${w}"`, `got ${qAll("op05 bbx")}`));
+  ok(!/ -case\b/.test(qAll("op05 case")), `...but not "case" when a case was asked for`, `got ${qAll("op05 case")}`);
+
+  group("Never a negated bracket group -- eBay refuses the search");
+  ["op01-016", "nami op01-016 aa", "op01-120 shanks", "op05 bbx", "psa 10 op05-119 manga"].forEach(t =>
+    ok(!/-\(/.test(qAll(t)), `"${t}" subtracts word by word`, `got ${qAll(t)}`));
+
+  group("Asia-English is not the English card");
+  ok(/ -asia -asian/.test(qAll("op01-016")), `an English search subtracts the Asia print run`, `got ${qAll("op01-016")}`);
+
+  group("Reprints of the number are subtracted from the original");
+  const orig = qAll("nami op01-016");
+  ["gift", "25th", "premium", "anniversary", "ultra", "promo", "promotion", "starter"].forEach(w =>
+    ok(new RegExp(" -" + w + "\\b").test(orig), `the Romance Dawn Nami subtracts "${w}"`, `got ${orig}`));
+  ok(/ -gift\b/.test(qAll("nami op01-016 aa")),
+     `...and so does its alt art -- sellers call the Gift Collection print "promo alt art"`);
+  const gift = qAll("nami op01-016 gift");
+  ok(/ gift /.test(gift) && !/ -gift/.test(gift), `typing "gift" searches the Gift Collection print`, `got ${gift}`);
+  ok(!/ -promo\b/.test(gift), `...without subtracting "promo" from it`, `got ${gift}`);
+  ok(/ -prb /.test(qAll("op01-120 shanks")) && / -reprint /.test(qAll("op01-120 shanks")),
+     `the Romance Dawn Shanks subtracts its PRB reprint`, `got ${qAll("op01-120 shanks")}`);
+  const prb = qAll("op01-120 shanks prb");
+  ok(/ prb /.test(prb) && !/ -reprint/.test(prb), `typing "prb" searches the reprint, all its words kept`, `got ${prb}`);
+  ok(!/ -promo/.test(qAll("luffy p-001")), `a promo ID is never told to subtract "promo"`, `got ${qAll("luffy p-001")}`);
+  ok(!/ -gift/.test(qAll("nami op01-016 jp")), `a Japanese search is not given the English reprint list`);
+
+  group("Not the card: binders, cases, proxies, playsets");
+  ["proxy", "binder", "acrylic", "insert", "playset", "lot", "keyring"].forEach(w =>
+    ok(new RegExp(" -" + w + "\\b").test(qAll("luffy op05-119 manga")), `a single subtracts "${w}"`));
+  ok(!/ -proxy/.test(qAll("luffy")), `a bare name search is left alone`);
+
+  group("Slabs: the other graders go");
+  const psa = qAll("psa 10 nami op01-016 aa");
+  ok(/ psa 10 /.test(psa) && / -bgs / .test(psa) && / -cgc /.test(psa) && !/ -psa/.test(psa),
+     `"psa 10" keeps PSA and subtracts BGS / CGC`, `got ${psa}`);
+  ok(!/ -beckett/.test(qAll("bgs 9.5 nami op01-016")), `BGS keeps Beckett, its other name`);
+
+  group("Picking a product");
+  eq(OP.withProduct("PSA 10 Nami OP01-016 gift", "25th"), "PSA 10 Nami OP01-016 25th", `one product swaps for another`);
+  eq(OP.withProduct("Nami OP01-016 gift", ""), "Nami OP01-016", `"" goes back to the original`);
+  const pv = OP.versions("nami op01-016");
+  ok(pv && pv.list[0].products[0].word === "" && pv.list[0].products.some(x => x.word === "gift"),
+     `the base print's products list the original first, then the Gift Collection`);
 
   // ── Catalogue ──────────────────────────────────────────────
   group("Catalogue (cards_op.js)");

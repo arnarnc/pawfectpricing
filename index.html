@@ -472,7 +472,8 @@
     .ver-chip:hover { color: var(--text); border-color: var(--text3); }
     .ver-chip.on { background: rgba(56,189,248,0.15); border-color: #38bdf8; color: #7dd3fc; }
     .ver-n { opacity: 0.7; font-weight: 700; }
-    .ver-sets { width: 100%; font-size: 11px; color: var(--text3); line-height: 1.4; }
+    .ver-sub { margin-top: 4px; color: var(--text3); }
+    .ver-chip.prod { font-weight: 500; }
     .status-badge.print  { background: rgba(56,189,248,0.15); color: #38bdf8; margin-left: 6px; }
 
     /* ── Comp entry ── */
@@ -1096,7 +1097,7 @@
 <script src="money.js?v=1"></script>
 <script src="recents.js?v=7"></script>
 <script src="compsearch.js?v=1"></script>
-<script src="onepiece.js?v=6"></script>
+<script src="onepiece.js?v=10"></script>
 <script src="cards.js"></script>
 <script src="cards_jp.js"></script>
 <script src="cards_op.js"></script>
@@ -1692,9 +1693,28 @@
       + escHtml(x.label)
       + (x.sets.length > 1 ? ` <span class="ver-n">×${x.sets.length}</span>` : "")
       + `</button>`).join("");
-    const sets = cur && cur.sets.length > 1
-      ? `<div class="ver-sets">${escHtml(cur.label)} is in: ${escHtml(cur.sets.join(" · "))}</div>` : "";
-    return `<div class="versions"><div class="ver-head">${escHtml(v.code)} · ${v.prints} versions</div>${chips}${sets}</div>`;
+    // The products this printing came in: the original set first, then each
+    // reprint (Gift Collection, 25th, PRB, tournament packs...). The original
+    // is what a plain search prices -- every reprint's words are subtracted --
+    // and tapping a reprint searches that product instead.
+    let prods = "";
+    const targetable = cur ? cur.products.filter((x, i) => i === 0 || x.word) : [];
+    if (targetable.length > 1) {
+      prods = `<div class="ver-head ver-sub">${escHtml(cur.label)} came in</div>`
+        + targetable.map((x, i) => {
+            const word = i === 0 ? "" : x.word;
+            const on = (v.product || "") === word;
+            return `<button type="button" class="ver-chip prod${on ? " on" : ""}"`
+              + ` onclick="pickProduct('${word}')">${escHtml(x.name)}${i === 0 ? " · original" : ""}</button>`;
+          }).join("");
+    }
+    return `<div class="versions"><div class="ver-head">${escHtml(v.code)} · ${v.prints} versions</div>${chips}${prods}</div>`;
+  }
+  function pickProduct(word) {
+    const ci = document.getElementById("cardInput");
+    ci.value = OnePiece.withProduct(ci.value, word);
+    update();
+    closeSuggestions();
   }
   function pickVersion(code) {
     const ci = document.getElementById("cardInput");
