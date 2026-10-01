@@ -1572,6 +1572,19 @@
     if (game === "op" && OnePiece.parseQuery(input).sealed) return true;
     return /\b(etb|elite trainer box|booster box|bbx|sealed|collection box|tin)\b/i.test(input);
   }
+  // Pokemon listings come in every print language, and only English and
+  // Japanese are wanted. Each language is subtracted as its own -term (eBay
+  // refuses a big negated group as "expensive keywords", see onepiece.js
+  // orGroup). Two-letter codes like "de"/"fr"/"it" are left out on purpose:
+  // they are real English words or part of other titles. A word the user typed
+  // themselves is never excluded, so "korean charizard" still works.
+  const OTHER_LANGS = ["korean","korea","kor","kr","chinese","china","cn","chn",
+    "indonesian","thai","german","french","italian","spanish","portuguese",
+    "dutch","polish","russian"];
+  function excludeOtherLanguages(query) {
+    const typed = new Set(query.toLowerCase().split(/[^a-z0-9]+/));
+    return query + OTHER_LANGS.filter(w => !typed.has(w)).map(w => " -" + w).join("");
+  }
   function buildUrls(input) {
     // One Piece rewrites the query rather than trimming it: the ID replaces the
     // name, the printing shorthand becomes seller wording. Everything after
@@ -1580,7 +1593,7 @@
     const normalized = exactSearch ? input
       : game === "op"
       ? expandProducts(expandConditions(OnePiece.buildQuery(input)))
-      : expandProducts(expandConditions(stripCardSuffix(normalizeCardNumber(input))));
+      : excludeOtherLanguages(expandProducts(expandConditions(stripCardSuffix(normalizeCardNumber(input)))));
     const encoded    = encodeURIComponent(normalized);
     const gradedFlag = isGraded(input) ? "Yes" : "No";
     const base = exactSearch || isSealedProduct(input)
