@@ -1018,7 +1018,7 @@
         <input type="checkbox" class="lang-opt" value="cn" onchange="onPickLang(this)" />
         <span>Chi only</span>
       </label>
-      <label class="chip" title="Sold results: Buy It Now only">
+      <label class="chip" title="Sold results: Buy It Now only" hidden>
         <input type="checkbox" id="excludeAuctions" onchange="onToggleAuctions()" />
         <span>No auctions</span>
       </label>
@@ -1618,7 +1618,8 @@
     const base = isSealedProduct(input)
       ? `_sacat=0`
       : `_sacat=0&Graded=${gradedFlag}&_dcat=183454`;
-    const binParam = excludeAuctions ? "&LH_BIN=1" : "";
+    // "No auctions" is hidden for now, so it must not apply from a saved "on".
+    const binParam = "";
     return {
       worldwideSold:  `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&${base}&LH_Sold=1&LH_Complete=1&rt=nc&_sop=${SORT.RECENT}${binParam}`,
       auSold:         `https://www.ebay.com.au/sch/i.html?_nkw=${encoded}&${base}&LH_Sold=1&LH_Complete=1&rt=nc&LH_PrefLoc=1&_sop=${SORT.RECENT}${binParam}`,
