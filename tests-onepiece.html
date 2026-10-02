@@ -256,23 +256,37 @@
   ok(/ -manga -comic -sp -special/.test(qAll("op01-016 aa jp")),
      `...and still subtracts the other printings`, `got ${qAll("op01-016 aa jp")}`);
 
-  const english = qAll("op01-016");
+  // No language chip lit and none typed: no language filter at all.
+  const none = qAll("op01-016");
+  ok(!/(^| )-(japanese|jp|chinese|cn|korean|kr)( |$)/.test(none) && !isLangAsk(none),
+     `default is no language filtering: nothing asked for, nothing excluded`,
+     `got ${none}`);
+
+  // The Eng only chip (second argument "en"): English is a claim, so the others go.
+  const english = OP.buildQuery("op01-016", "en");
   ok(/ -japanese /.test(english),
-     `no language typed means English, and English is a claim: the others go`,
-     `got ${english}`);
+     `Eng only excludes the other languages`, `got ${english}`);
   ["japan", "jap", "jp", "chinese", "cn", "korean", "kr"].forEach(w =>
     ok(english.indexOf(w) !== -1, `"${w}" is in the excluded group`, `got ${english}`));
-  eq(qAll("op01-016 en"), english, `typing "en" says the same thing as saying nothing`);
+  eq(qAll("op01-016 en"), english, `typing "en" is the same as the Eng only chip`);
   ok(!/(^| )english( |$)/.test(english),
      `...but "english" is never ASKED for: requiring it halves the comps and moves no
       price, because plenty of genuine English titles never write the word`,
      `got ${english}`);
 
+  // Jap only / Chi only chips ask for the language and win over typed text.
+  ok(/\(japanese,japan,jap,jp,jpn\)/.test(OP.buildQuery("op01-016", "jp")),
+     `Jap only asks for every Japanese spelling`, `got ${OP.buildQuery("op01-016", "jp")}`);
+  ok(/\(chinese,cn,chn,china\)/.test(OP.buildQuery("op01-016", "cn")),
+     `Chi only asks for the Chinese group`, `got ${OP.buildQuery("op01-016", "cn")}`);
+  ok(/\(chinese,cn,chn,china\)/.test(OP.buildQuery("op01-016 jp", "cn")),
+     `a chip beats a language typed in the box`, `got ${OP.buildQuery("op01-016 jp", "cn")}`);
+
   // The whole point of the two groups sitting side by side.
-  ok(/ -manga -comic -sp/.test(qAll("op01-016 alt")) && / -japanese/.test(qAll("op01-016 alt")),
+  ok(/ -manga -comic -sp/.test(OP.buildQuery("op01-016 alt", "en")) && / -japanese/.test(OP.buildQuery("op01-016 alt", "en")),
      `an English alt excludes the other printings of its number AND every other
       language of it`,
-     `got ${qAll("op01-016 alt")}`);
+     `got ${OP.buildQuery("op01-016 alt", "en")}`);
 
   group("A query with nothing in it is still handed back untouched");
   eq(qAll(""), "", `an empty box searches nothing, not a page of exclusions`);
@@ -369,9 +383,9 @@
   // to be thrown away here entirely.
   ok(/\(japanese,japan,jap,jp,jpn\)/.test(qAll("op17 bbx jp")),
      `"op17 bbx jp" asks for the Japanese box`, `got ${qAll("op17 bbx jp")}`);
-  ok(/ -japanese/.test(qAll("op17 bbx")),
-     `...and an unmarked box is the English one, same as a card`,
-     `got ${qAll("op17 bbx")}`);
+  ok(/ -japanese/.test(OP.buildQuery("op17 bbx", "en")),
+     `...and with Eng only lit the box is the English one, same as a card`,
+     `got ${OP.buildQuery("op17 bbx", "en")}`);
   ok(/\(op17,op-17\)/.test(qAll("op17 bbx jp")) && !/warriors/i.test(qAll("op17 bbx jp")),
      `a Japanese box is searched by its code -- Japan titles its sets in its own English`,
      `got ${qAll("op17 bbx jp")}`);
@@ -388,7 +402,7 @@
     ok(!/-\(/.test(qAll(t)), `"${t}" subtracts word by word`, `got ${qAll(t)}`));
 
   group("Asia-English is not the English card");
-  ok(/ -asia -asian/.test(qAll("op01-016")), `an English search subtracts the Asia print run`, `got ${qAll("op01-016")}`);
+  ok(/ -asia -asian/.test(OP.buildQuery("op01-016", "en")), `an Eng only search subtracts the Asia print run`, `got ${OP.buildQuery("op01-016", "en")}`);
 
   group("Reprints of the number are subtracted from the original");
   const orig = qAll("nami op01-016");

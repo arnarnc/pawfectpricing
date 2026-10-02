@@ -156,6 +156,8 @@
     var want = String(lang || "").toLowerCase();
     if (want && want !== "english" && LANG_SEARCH[want]) return orGroup(LANG_SEARCH[want]);
     if (want && want !== "english") return want;
+    // No language at all is no filter: the user has not asked for one.
+    if (!want) return "";
     return negate(NOT_ENGLISH);
   }
 
@@ -882,8 +884,11 @@
   // all, and the ID is not what a buyer searched. How wide that net is stays in
   // the typist's hands -- the same rule the sealed branch above already follows
   // when it sends a set's full name.
-  function buildQuery(raw) {
+  function buildQuery(raw, langPick) {
     var p = parseQuery(raw);
+    // The language buttons win over a language typed into the box; with neither,
+    // no language filter is sent.
+    var lang = ({ en: "english", jp: "japanese", cn: "chinese" })[langPick] || p.lang;
 
     // Sealed: a set code means the set's NAME, because that is how boxes are
     // titled. Nobody lists "OP17 booster box"; they list "The World's Strongest
@@ -903,14 +908,14 @@
       // of the New Generation" there), so the English name found 30 Japanese
       // OP-05 boxes where "(op05,op-05)" found 63. An English box keeps the
       // name -- by code it pulled in "OP05 Series Cards 300pcs" fakes.
-      var jp = p.lang && p.lang !== "english";
+      var jp = lang && lang !== "english";
       var code = p.setCode.toLowerCase();
       var codeForms = [code, code.replace(/^([a-z]+)(\d+)$/, "$1-$2")];
       var typedS = typedWords(raw);
       var junk = NOT_SEALED.concat(/\bcase\b/i.test(String(raw)) ? [] : ["case"])
         .filter(function (w) { return typedS.indexOf(w) === -1; });
       return ["one piece", jp ? orGroup(codeForms) : setName]
-        .concat(p.extras, p.name, [langTerms(p.lang), negate(junk)])
+        .concat(p.extras, p.name, [langTerms(lang), negate(junk)])
         .join(" ").trim();
     }
 
@@ -936,12 +941,10 @@
     // page of exclusions and nothing to exclude them from.
     if (!parts.length) return String(raw || "");
 
-    // Every card query carries a language, typed or not: an untyped one means
-    // English, and for One Piece that is a claim about the card rather than a
-    // silence -- the Japanese print of this exact ID is on the same page, at a
-    // different price. It goes last so the words a title is matched on read
-    // first in the box.
-    parts.push(langTerms(p.lang));
+    // The language goes last so the words a title is matched on read first in
+    // the box. Untyped and unpicked it adds nothing: no language filter by
+    // default, the Japanese print of an ID shares the page with the English.
+    parts.push(langTerms(lang));
 
     var seen = {};
     var out = parts.join(" ").split(/\s+/)

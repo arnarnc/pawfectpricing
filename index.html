@@ -1006,9 +1006,17 @@
   <!-- Lookups -->
   <div class="ebay-section">
     <div class="options" role="group" aria-label="Search options">
-      <label class="chip" title="Send exactly what you typed — no rewriting, no card filters">
-        <input type="checkbox" id="exactSearch" onchange="onToggleExact()" />
-        <span>Exact text</span>
+      <label class="chip" title="Only Japanese listings">
+        <input type="checkbox" class="lang-opt" value="jp" onchange="onPickLang(this)" />
+        <span>Jap only</span>
+      </label>
+      <label class="chip" title="Only English listings">
+        <input type="checkbox" class="lang-opt" value="en" onchange="onPickLang(this)" />
+        <span>Eng only</span>
+      </label>
+      <label class="chip" title="Only Chinese listings">
+        <input type="checkbox" class="lang-opt" value="cn" onchange="onPickLang(this)" />
+        <span>Chi only</span>
       </label>
       <label class="chip" title="Sold results: Buy It Now only">
         <input type="checkbox" id="excludeAuctions" onchange="onToggleAuctions()" />
@@ -1323,7 +1331,7 @@
     // first keystroke — which is the only moment the user would ever feel it.
     setTimeout(buildGameWords, 0);
     document.getElementById("excludeAuctions").checked = excludeAuctions;
-    document.getElementById("exactSearch").checked = exactSearch;
+    applyLang();
     applyDesktopMode();
     // Restore the last typed card so a refresh doesn't lose it.
     const lastCard = localStorage.getItem("lastCard");
@@ -1375,16 +1383,21 @@
     update();
   }
 
-  // ── Exact search ──────────────────────────────────────────
-  // Off by default. When on, eBay gets the typed text verbatim, for either
-  // game: no number normalising, no suffix stripping, no shorthand expansion,
-  // no One Piece ID rewrite, and no category / Graded filter. Only what the
-  // buttons themselves mean (sold, AU, Buy It Now, sort) and the user's own
-  // "No auctions" choice still apply.
-  let exactSearch = localStorage.getItem("exactSearch") === "true";
-  function onToggleExact() {
-    exactSearch = document.getElementById("exactSearch").checked;
-    localStorage.setItem("exactSearch", exactSearch);
+  // ── Language filter ───────────────────────────────────────
+  // "" (off) by default: no language terms go to eBay, for either game, and
+  // everything else (raw / graded, sealed, number handling) works as before.
+  // Jap / Eng / Chi are three chips that behave like a radio group you can also
+  // clear: tapping the lit one turns the filter back off. When one is lit, only
+  // that language is searched for.
+  let langFilter = localStorage.getItem("langFilter") || "";
+  if (!["jp", "en", "cn"].includes(langFilter)) langFilter = "";
+  function applyLang() {
+    document.querySelectorAll(".lang-opt").forEach(cb => { cb.checked = cb.value === langFilter; });
+  }
+  function onPickLang(cb) {
+    langFilter = cb.checked ? cb.value : "";
+    localStorage.setItem("langFilter", langFilter);
+    applyLang();
     update();
   }
 
@@ -1572,31 +1585,37 @@
     if (game === "op" && OnePiece.parseQuery(input).sealed) return true;
     return /\b(etb|elite trainer box|booster box|bbx|sealed|collection box|tin)\b/i.test(input);
   }
-  // Pokemon listings come in every print language, and only English and
-  // Japanese are wanted. Each language is subtracted as its own -term (eBay
-  // refuses a big negated group as "expensive keywords", see onepiece.js
-  // orGroup). Two-letter codes like "de"/"fr"/"it" are left out on purpose:
-  // they are real English words or part of other titles. A word the user typed
-  // themselves is never excluded, so "korean charizard" still works.
-  const OTHER_LANGS = ["korean","korea","kor","kr","chinese","china","cn","chn",
-    "indonesian","thai","german","french","italian","spanish","portuguese",
-    "dutch","polish","russian"];
-  function excludeOtherLanguages(query) {
+  // Language filter for Pokemon, applied only when a language chip is lit.
+  // "Only X" asks for X with every spelling sellers use, as an OR-group (a real
+  // union on eBay). "Only English" never asks for "english" -- plenty of English
+  // titles don't write it -- it subtracts the other languages instead, each as
+  // its own -term because eBay refuses one big negated group as "expensive
+  // keywords". Two-letter codes like de/fr/it are left out: they are real words.
+  const LANG_ASK = {
+    jp: ["japanese","japan","jap","jp","jpn"],
+    cn: ["chinese","china","cn","chn"]
+  };
+  const NOT_ENGLISH = ["japanese","japan","jap","jp","jpn","nihongo",
+    "chinese","china","cn","chn","korean","korea","kr","kor",
+    "indonesian","thai","german","french","italian","spanish","portuguese"];
+  function languageTerms(query) {
+    if (!langFilter) return query;
+    if (LANG_ASK[langFilter]) return query + " (" + LANG_ASK[langFilter].join(",") + ")";
+    // A word the user typed themselves is never excluded.
     const typed = new Set(query.toLowerCase().split(/[^a-z0-9]+/));
-    return query + OTHER_LANGS.filter(w => !typed.has(w)).map(w => " -" + w).join("");
+    return query + NOT_ENGLISH.filter(w => !typed.has(w)).map(w => " -" + w).join("");
   }
   function buildUrls(input) {
     // One Piece rewrites the query rather than trimming it: the ID replaces the
     // name, the printing shorthand becomes seller wording. Everything after
     // that — condition expansion, the graded aspect, the sort codes — is shared,
     // because none of it is game-specific.
-    const normalized = exactSearch ? input
-      : game === "op"
-      ? expandProducts(expandConditions(OnePiece.buildQuery(input)))
-      : excludeOtherLanguages(expandProducts(expandConditions(stripCardSuffix(normalizeCardNumber(input)))));
+    const normalized = game === "op"
+      ? expandProducts(expandConditions(OnePiece.buildQuery(input, langFilter)))
+      : languageTerms(expandProducts(expandConditions(stripCardSuffix(normalizeCardNumber(input)))));
     const encoded    = encodeURIComponent(normalized);
     const gradedFlag = isGraded(input) ? "Yes" : "No";
-    const base = exactSearch || isSealedProduct(input)
+    const base = isSealedProduct(input)
       ? `_sacat=0`
       : `_sacat=0&Graded=${gradedFlag}&_dcat=183454`;
     const binParam = excludeAuctions ? "&LH_BIN=1" : "";
@@ -1621,9 +1640,8 @@
   // gets only the card: name + number for Pokémon, with the number exactly as
   // typed, because Collectr matches it literally ("4/102" and "004/102" are
   // different results there). For One Piece it gets name + ID, which lists
-  // every printing of that ID with its price. Exact mode sends the text as is.
+  // every printing of that ID with its price.
   function collectrQuery(input) {
-    if (exactSearch) return input;
     if (game === "op") {
       const p = OnePiece.parseQuery(input);
       if (p.code) return p.name.concat(p.code).join(" ");
@@ -1667,9 +1685,7 @@
     const collectr = collectrUrl(value);
     document.getElementById("collectrLink").href        = collectr;
     document.getElementById("collectrLinkDesktop").href = collectr;
-    if (exactSearch) {
-      statusEl.innerHTML = '<span class="status-badge exact">🔤 Exact search</span>';
-    } else if (isSealedProduct(value)) {
+    if (isSealedProduct(value)) {
       statusEl.innerHTML = '<span class="status-badge sealed">📦 Sealed</span>';
     } else if (isGraded(value)) {
       statusEl.innerHTML = '<span class="status-badge graded">⚡ Graded Card</span>';
@@ -1679,7 +1695,7 @@
     // Which printing the One Piece search is actually pinned to. Worth its own
     // badge: the same ID spans a $2 card and a $2,000 one, and the difference
     // between them is a two-letter tag that is easy to forget to type.
-    if (game === "op" && !exactSearch) {
+    if (game === "op") {
       const print = OnePiece.badge(value);
       const vers  = versionsHtml(value);
       // The version chips already highlight the printing being searched; the
