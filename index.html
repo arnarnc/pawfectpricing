@@ -1391,15 +1391,41 @@
   // that language is searched for.
   let langFilter = localStorage.getItem("langFilter") || "";
   if (!["jp", "en", "cn"].includes(langFilter)) langFilter = "";
+  // A lit language chip clears itself after a minute so searches go back to
+  // all languages; the pick time is stored so a reload can't revive a stale one.
+  const LANG_TTL_MS = 60 * 1000;
+  let langTimer = null;
+  function clearLang() {
+    langFilter = "";
+    localStorage.setItem("langFilter", "");
+    localStorage.removeItem("langFilterAt");
+    applyLang();
+    update();
+  }
+  function armLangTimer() {
+    clearTimeout(langTimer);
+    if (!langFilter) return;
+    const left = LANG_TTL_MS - (Date.now() - Number(localStorage.getItem("langFilterAt") || 0));
+    if (left <= 0) { clearLang(); return; }
+    langTimer = setTimeout(clearLang, left);
+  }
+  if (langFilter && Date.now() - Number(localStorage.getItem("langFilterAt") || 0) >= LANG_TTL_MS) {
+    langFilter = "";
+    localStorage.setItem("langFilter", "");
+  }
   function applyLang() {
     document.querySelectorAll(".lang-opt").forEach(cb => { cb.checked = cb.value === langFilter; });
   }
   function onPickLang(cb) {
     langFilter = cb.checked ? cb.value : "";
     localStorage.setItem("langFilter", langFilter);
+    if (langFilter) localStorage.setItem("langFilterAt", String(Date.now()));
+    else localStorage.removeItem("langFilterAt");
     applyLang();
+    armLangTimer();
     update();
   }
+  armLangTimer();
 
   // ── Desktop "Go" mode ─────────────────────────────────────
   // eBay blocks iframe embedding (X-Frame-Options / CSP frame-ancestors),
