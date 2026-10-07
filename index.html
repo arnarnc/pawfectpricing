@@ -2592,6 +2592,25 @@
     renderComp();
   }
 
+  // Copies "Name - $price" per line, price being the offer (price × the row's %).
+  // Rounded per row here since each line is shown on its own; excluded rows skipped.
+  function exportComp(btn) {
+    const lines = compItems.filter(x => !x.excluded).map(x => {
+      const offer = Math.round(Money.toDollars(x.price) * Money.toPct(x.pct, 100) / 100);
+      return `${x.label} - $${fmtUSD(offer)}`;
+    });
+    if (!lines.length) return;
+    const flash = msg => {
+      btn.textContent = msg;
+      setTimeout(() => { btn.textContent = "Export"; }, 2000);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(lines.join("\n")).then(() => flash("✓ Copied"), () => flash("Couldn't copy"));
+    } else {
+      flash("Couldn't copy");
+    }
+  }
+
   function toggleCompExclude(id) {
     const item = compItems.find(x => x.id === id);
     if (!item) return;
@@ -3141,10 +3160,14 @@
       <div class="section-block">
         <div class="block-hdr">
           <span class="section-label">Customer's Items (${compItems.length} ${compItems.length === 1 ? "Item" : "Items"}${compItems.some(x=>x.excluded) ? `, ${compItems.filter(x=>x.excluded).length} excluded` : ""})</span>
-          <select class="comp-pct-select" onchange="cascadePct(this.value)" title="Apply % to all">
-            <option value="" selected>% All</option>
-            ${headerOpts}
-          </select>
+          <span style="display:flex;gap:6px;align-items:center">
+            ${compItems.length ? `<button type="button" class="discard-btn" style="padding:4px 10px"
+              onclick="exportComp(this)" title="Copy each card's name and offer price to the clipboard">Export</button>` : ""}
+            <select class="comp-pct-select" onchange="cascadePct(this.value)" title="Apply % to all">
+              <option value="" selected>% All</option>
+              ${headerOpts}
+            </select>
+          </span>
         </div>
         ${compBodyHtml}
       </div>
